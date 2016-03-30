@@ -53,7 +53,7 @@ data_product_id_query = "select * from ivoa.obscore where obs_id = '"+ str(sbid)
 #selected_service = "async_service"
 # If the selected_service is cutout_service, it will use the RA and DEC values in the catalogue_query below to generate cutouts of the image cubes
 selected_service = "cutout_service"
-catalogue_query = 'SELECT * FROM casda.continuum_component where sbid = ' + str(sbid) + ' and flux_peak > 1000'
+catalogue_query = 'SELECT * FROM casda.continuum_component where sbid = ' + str(sbid) + ' and flux_peak > 500'
 cutout_radius_degrees = 0.1 # The radius of the cutouts you want to generate
 
 image_file_write_mode = 'wb' # needs to be 'wb' on windows
