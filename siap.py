@@ -31,25 +31,33 @@ from astropy.io.votable import parse
 from astropy.coordinates import SkyCoord
 from astropy import units
 
+# For hidden entry of password
+import getpass
+
 ###### CONFIGURATION #######
 
-if len(sys.argv) != 6:
-    print "Usage: siap.py OPAL_username OPAL_password ra dec Destination_Directory"
+if len(sys.argv) != 5 and len(sys.argv) != 6:
+    print "Usage: siap.py OPAL_username [OPAL_password] ra dec Destination_Directory"
     sys.exit()
 
 # your OPAL username and password
 username = sys.argv[1] # First argument should be your OPAL username
-password = sys.argv[2] # Second argument should be your OPAL password
+if len(sys.argv) > 5:
+    password = sys.argv[2] # Second argument should be your OPAL password
+    argidx = 2
+else:
+    password = getpass.getpass("Enter your OPAL password: ")
+    argidx = 1
 # Sky location
-ra = sys.argv[3] # Third argument should be right ascension of the centre of the sky region
-dec = sys.argv[4] # Fourth argument should be declination of the centre of the sky region
+ra = sys.argv[argidx+1] # Third argument should be right ascension of the centre of the sky region
+dec = sys.argv[argidx+2] # Fourth argument should be declination of the centre of the sky region
 if ra.find(':') > -1 or ra.find('h') > -1:
     sky_loc = SkyCoord(ra, dec, frame='icrs', unit=(units.hourangle, units.deg))
 else:
     sky_loc = SkyCoord(ra, dec, frame='icrs', unit=(units.deg, units.deg))
 
 search_radius_degrees = 0.1
-dest_dir_root = sys.argv[5] # Fifth should be the root destination directory
+dest_dir_root = sys.argv[argidx+3] # Fifth should be the root destination directory
 
 # This query is used to select the image cubes for a given sky region
 sky_region_query = 'CIRCLE %f %f %f' % (sky_loc.ra.degree, sky_loc.dec.degree, search_radius_degrees)
