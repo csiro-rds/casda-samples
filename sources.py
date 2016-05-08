@@ -1,15 +1,12 @@
 #############################################################################################
 #
-# Python script to demonstrate interacting with CASDA's TAP and SODA implementations to
-# retrieve cutout images in bulk.
+# Python script to demonstrate interacting with CASDA's SODA implementation to
+# retrieve cutout images around a list of sources.
 # 
-# This script does a TAP query to get the image cubes for a given scheduling block, and can be
-# configured to either:
-# a) conduct a second TAP query to identify catalogue entries of interest, and create an async
-#    job to download cutouts at the RA and DEC of each of the catalogue entries.
-# b) create an async job to download the entire image cube file.
+# This script creates a job to produce and download cutouts from the specified image at
+# the positions provided in an input file (each line has an RA and DEC).
 #
-# Author: Amanda Helliwell on 16 Dec 2015
+# Author: James Dempsey on 16 Apr 2016
 #
 # Written for python 2.7
 # Note: astropy is available on galaxy via 'module load astropy'
@@ -32,14 +29,16 @@ import urllib, urllib2, base64
 import xml.etree.ElementTree as ET
 # VO Table parsing
 from astropy.io.votable import parse
+from astropy.coordinates import SkyCoord
+from astropy import units
 
 # For hidden entry of password
 import getpass
 
 ###### CONFIGURATION #######
 
-if len(sys.argv) != 4 and len(sys.argv) != 5:
-    print "Usage: cutouts.py OPAL_username [OPAL_password] scheduling_block_id Destination_Directory"
+if len(sys.argv) != 5 and len(sys.argv) != 6:
+    print "Usage: sources.py OPAL_username [OPAL_password] image_id source_list_file Destination_Directory"
     sys.exit()
 
 # your OPAL username and password
@@ -50,24 +49,24 @@ if len(sys.argv) > 5:
 else:
     password = getpass.getpass("Enter your OPAL password: ")
     argidx = 1
-# scheduling block id
-sbid = sys.argv[argidx+1] # Third should be the scheduling_block_id, eg 110000
+# image and source info
+image_id = sys.argv[argidx + 1] # Third should be the image_id, eg image-11 (can be obtained from a siap query)
+source_list_file = sys.argv[argidx+2] # Fourth should be the file containing sources
 
-dest_dir_root = sys.argv[argidx+2] # Fourth should be the root destination directory
+dest_dir_root = sys.argv[argidx+3] # Fifth should be the root destination directory
+
+# Initially this will take in an image id. After the 1.2 release it could take in an
+# observation id and an image subtype
 
 # This query is used to select the image cubes for a given scheduling block
-data_product_id_query = "select * from ivoa.obscore where obs_id = '"+ str(sbid) + "' and dataproduct_type = 'cube'"
+#data_product_id_query = "select * from ivoa.obscore where obs_id = '"+ str(sbid) + "' and dataproduct_type = 'cube'"
+data_product_id_query = "select * from ivoa.obscore where obs_publisher_did = '" + image_id + "' and dataproduct_type = 'cube'"
 
-# If the selected_service is async_service, it will download the entire image files
-#selected_service = "async_service"
-# If the selected_service is cutout_service, it will use the RA and DEC values in the catalogue_query below to generate cutouts of the image cubes
-selected_service = "cutout_service"
-catalogue_query = 'SELECT * FROM casda.continuum_component where first_sbid = ' + str(sbid) + ' and flux_peak > 500'
 cutout_radius_degrees = 0.1 # The radius of the cutouts you want to generate
 
 image_file_write_mode = 'wb' # needs to be 'wb' on windows
 adql_file_write_mode = 'w' # ok for windows
-destination_dir = dest_dir_root+"/"+str(sbid)+"/" # directory the files will be saved to
+destination_dir = dest_dir_root+"/"+str(image_id) + "/" # directory the files will be saved to
 poll_interval = 10 # number of seconds to wait between polls to check whether the async job has completed
 
 casda_adql_query_base_url = "https://data.csiro.au/casda_vo_proxy/vo/tap/sync"
@@ -82,7 +81,7 @@ def retrieve_data_link_to_file(image_cube_datalink_link_url, image_cube_id, user
     request = urllib2.Request(image_cube_datalink_link_url)
     # Uses basic auth to securely access the data access information for the image cube
     base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
-    request.add_header("Authorization", "Basic %s" % base64string)
+    request.add_header("Authorization", "Basic %s" % base64string)  
     
     # Save the data access vo table information to a file: eg C:/temp/datalink-cube-1234.xml
     result = urllib2.urlopen(request)
@@ -200,28 +199,58 @@ def adql_query(url, query_string, filename, username, password, file_write_mode)
     # Uses basic auth to securely access the data access information for the image cube
     base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
     req.add_header("Authorization", "Basic %s" % base64string)
+    print req
     data = urllib.urlencode({'query':query_string, 'request':'doQuery', 'lang':'ADQL', 'format':'votable'})
     u = urllib2.urlopen(req, data)
     with open(filename,file_write_mode) as f:
         f.write(u.read())
 
+def parse_sources_file(filename):
+    """
+    Read in a file of sources, with one source each line. Each source is specified as a
+    right ascension and declination pair separated by space.
+    e.g.
+    1:34:56 -45:12:30
+    320.20 -43.5
+    :param filename: The name of the file contining the list of sources
+    :return: A list of SkyCoord objects representing the parsed sources.
+    """
+    sourcelist = []
+    with open(filename, 'r') as f:
+        for line in f:
+            if line and line[0] != '#':
+                parts = line.split()
+                if len(parts) > 1:
+                    if parts[0].find(':') > -1 or parts[0].find('h') > -1:
+                        sky_loc = SkyCoord(parts[0], parts[1], frame='icrs',
+                                           unit=(units.hourangle, units.deg))
+                    else:
+                        sky_loc = SkyCoord(parts[0], parts[1], frame='icrs',
+                                           unit=(units.deg, units.deg))
+                    sourcelist.append(sky_loc)
+    return sourcelist
+
 ###### SCRIPT ######
 
-# 1) Create the destination directory
+# 1) Read in the list of sources
+print "\n\n** Parsing the source list ...\n"
+source_list = parse_sources_file(source_list_file)
+print "\n** Read %d sources...\n\n" % (len(source_list))
+
+# 2) Create the destination directory
 if not os.path.exists(destination_dir):
     os.makedirs(destination_dir)
 
-# 2) Use CASDA VO (secure) to query for the images associated with the given scheduling_block_id
-print "\n\n** Finding images and image cubes for scheduling block %s ... \n\n" % (sbid)
-filename = destination_dir + "image_cubes_" + str(sbid) + ".xml"
+# 3) Use CASDA VO (secure) to query for the images associated with the given scheduling_block_id
+print "\n\n** Retreiving image details for %s ... \n\n" % (image_id)
+filename = destination_dir + str(image_id) + ".xml"
 adql_query(casda_adql_query_base_url, data_product_id_query, filename, username, password, adql_file_write_mode)
 #print(data_product_id_query)
 image_cube_votable = parse(filename, pedantic=False)
 results_array = image_cube_votable.get_table_by_id('results').array
 #print results_array
-#print (raw_input('Continue? '))
 
-# 3) For each of the image cubes, query datalink to get the secure datalink details 
+# 4) For each of the image cubes, query datalink to get the secure datalink details
 print "\n\n** Retrieving datalink for each image and image cube...\n\n"
 authenticated_id_tokens = []
 async_url = None
@@ -231,7 +260,7 @@ for image_cube_result in results_array:
     image_cube_id = image_cube_result['obs_publisher_did']
     #print image_cube_datalink_url, image_cube_id
     
-    # 3a) Use datalink (may be secure or unsecure) to get the secure datalink details
+    # 4a) Use datalink (may be secure or unsecure) to get the secure datalink details
     filename = retrieve_data_link_to_file(image_cube_datalink_url, image_cube_id, username, password, destination_dir, adql_file_write_mode)
     # If the obscore points to the unsecure datalink, this finds the secure datalink url
     authenticated_datalink_url = parse_datalink_for_authenticated_datalink_url(filename)
@@ -240,8 +269,8 @@ for image_cube_result in results_array:
         # This overwrites the file with the data from the secure datalink endpoint
         filename = retrieve_data_link_to_file(authenticated_datalink_url, image_cube_id, username, password, destination_dir, adql_file_write_mode)
     
-    # 3b) Get the authenticated id tokens for the images, and the async request url
-    async_url, authenticated_id_token = parse_datalink_for_service_and_id(filename, selected_service)
+    # 4b) Get the authenticated id tokens for the images, and the async request url
+    async_url, authenticated_id_token = parse_datalink_for_service_and_id(filename, 'cutout_service')
     authenticated_id_tokens.append(authenticated_id_token)
     
     if async_url == None:
@@ -251,38 +280,25 @@ for image_cube_result in results_array:
 if len(authenticated_id_tokens) == 0:
     print "No image cubes for scheduling_block_id " + str(sbid)
     sys.exit()
-#print (raw_input('Continue? '))
 
-# 4) Create the async job
+# 5) Create the async job
 job_location = create_async_job(async_url, authenticated_id_tokens)
   
-# 5) If we have chosen cutout_service, add the filter parameters (POS) to request cutouts
-if selected_service == "cutout_service":
-    print "\n\n** Finding components in each image and image cube...\n\n"
-    # Run the catalogue_query to find catalogue entries that are of interest
-    filename = destination_dir + "catalogue_query_" + str(sbid) + ".xml"
-    adql_query(casda_adql_query_base_url, catalogue_query, filename, username, password, adql_file_write_mode)
-    catalogue_vo_table = parse(filename, pedantic=False)
-    catalogue_results_array = catalogue_vo_table.get_table_by_id('results').array
-    #print catalogue_results_array
-    print "\n\n** Found %d components...\n\n" % (len(catalogue_results_array))
+# 6) For each of the entries in the results of the catalogue query, add the position filter as a parameter to the async job
+cutout_filters = []
+for sky_loc in source_list:
+    ra = sky_loc.ra.degree
+    dec = sky_loc.dec.degree
+    #print ra, dec, cutout_radius_degrees
+    filter = "CIRCLE " + str(ra) + " " + str(dec) + " " + str(cutout_radius_degrees)
+    cutout_filters.append(('pos',filter))
+add_params_to_async_job(job_location, cutout_filters)
 
-    # For each of the entries in the results of the catalogue query, add the position filter as a parameter to the async job
-    cutout_filters = []
-    for entry in catalogue_results_array:
-        ra = entry['ra_deg_cont']
-        dec = entry['dec_deg_cont']
-        #print ra, dec, cutout_radius_degrees
-        filter = "CIRCLE " + str(ra) + " " + str(dec) + " " + str(cutout_radius_degrees)
-        cutout_filters.append(('pos',filter))
-    add_params_to_async_job(job_location, cutout_filters)
-#print (raw_input('Continue? '))
-
-# 6) Start the async job
+# 7) Start the async job
 print "\n\n** Starting the retrieval job...\n\n"
 start_async_job(job_location)
 
-# 7) Poll until the async job has finished
+# 8) Poll until the async job has finished
 job_details = get_job_details_xml(job_location)
 status = read_job_status(job_details, ns)
 while status == 'EXECUTING' or status == 'QUEUED' or status == 'PENDING':
@@ -292,7 +308,7 @@ while status == 'EXECUTING' or status == 'QUEUED' or status == 'PENDING':
     job_details = get_job_details_xml(job_location)
     status = read_job_status(job_details, ns)
   
-# 8) If the async job has completed successfully, it will download all of the files, otherwise will alert that it didn't complete 
+# 9) If the async job has completed successfully, it will download all of the files, otherwise will alert that it didn't complete
 if status == 'COMPLETED':
     print "\n\n** Downloading results...\n\n"
     for result in job_details.find("uws:results", ns).findall("uws:result", ns):

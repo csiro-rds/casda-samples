@@ -9,7 +9,7 @@ http://www.atnf.csiro.au/observers/data/casdaguide.html
 
 ## OPAL Authentication
 
-Many of the scripts require the use of credentials to access data, this is the case for all image and image cube access.  
+Many of the scripts require the use of credentials to access data, this is the case for all image and image cube access.
 
 For general use, we recommend using OPAL accounts. To register with OPAL, go to the 
 [OPAL Home Page](http://opal.atnf.csiro.au/) and click on the link to 'Register'. Enter your email address, name, 
@@ -22,11 +22,13 @@ forgotten your password you may request that a new one be sent via email.
 
 ## Script Details
 
+Note: Where the OPAL_password is shown as optional if it is omitted the user will be prompted for it at run time.
+
 ### cutouts.py
 
 Python script to demonstrate interacting with CASDA's TAP and SODA implementations to retrieve cutout images in bulk.
 
-**Usage:** python cutouts.py OPAL_username OPAL_password scheduling_block_id Destination_Directory
+**Usage:** python cutouts.py OPAL_username [OPAL_password] scheduling_block_id Destination_Directory
 
 This script does a TAP query to get the image cubes for a given scheduling block, and can be configured to either:
 
@@ -38,7 +40,17 @@ at the RA and DEC of each of the catalogue entries.
 
 Python script to demonstrate interaction with CASDA's SIAP v2 service.
 
-***Usage:*** python siap.py OPAL_username OPAL_password ra dec Destination_Directory 
+***Usage:*** python siap.py OPAL_username [OPAL_password] ra dec Destination_Directory 
 
 This script does a SIA 2 query to get the image cubes for a given sky location, and creates an async job to download 
 all matched image cube files.
+
+### sources.py
+
+Python script to demonstrate interaction with CASDA's SODA implementation to retrieve cutout images around a list of 
+sources.
+
+***Usage:*** python sources.py OPAL_username [OPAL_password] image_id source_list_file Destination_Directory 
+
+This script does a TAP query to get the image cubes for a given scheduling block, and then produces cutouts for each
+location in the source list file.
