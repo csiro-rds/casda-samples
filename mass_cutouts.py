@@ -104,7 +104,7 @@ def generate_random_cutouts(args, cube_dim):
     # random start locations on freq axis - random pixels converted to axis values
     freq_axis = cube_dim['axes'][3]
     freq_max = int(freq_axis['numPixels']) - _large_cutout_em_len - 1
-    freq_vals = np.random.random_integers(0, dec_max, 2) * float(freq_axis['pixelSize'])
+    freq_vals = np.random.random_integers(0, freq_max, 2) * float(freq_axis['pixelSize'])
     band_params = []
     for i in range(0, len(freq_vals)):
         freq_min = freq_vals[i] + float(freq_axis['min'])
