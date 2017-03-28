@@ -25,9 +25,9 @@ _casda_base_url_vo_test = "https://castst.csiro.au/casda_vo_proxy/vo/"
 _casda_base_url_vo_dev = "https://casdev.csiro.au/casda_vo_proxy/vo/"
 
 _casda_base_url_soda_prod = "https://casda.csiro.au/casda_data_access/"
-_casda_base_url_soda_at = "https://casda-a-app.pawsey.org.au/casda_data_access/"
-_casda_base_url_soda_test = "https://casda-t-app.pawsey.org.au/casda_data_access/"
-_casda_base_url_soda_dev = "https://casda-dev-app.pawsey.org.au/casda_data_access/"
+_casda_base_url_soda_at = "https://casda-at-app.csiro.au/casda_data_access/"
+_casda_base_url_soda_test = "https://casda-tst-app.csiro.au/casda_data_access/"
+_casda_base_url_soda_dev = "https://casda-dev-app.csiro.au/casda_data_access/"
 
 _casda_query_base_url = _casda_base_url_vo_prod
 _casda_soda_base_url = _casda_base_url_soda_prod
