@@ -5,9 +5,11 @@
 from __future__ import print_function, division
 
 import base64
+import getpass
 import re
 import time
-import urllib, urllib2
+import urllib
+import urllib2
 
 
 # VO Table parsing
@@ -16,7 +18,7 @@ from astropy.io.votable import parse
 import xml.etree.ElementTree as ET
 
 # name space used to understand the XML job details response
-_uws_ns = {'uws':'http://www.ivoa.net/xml/UWS/v1.0'}
+_uws_ns = {'uws': 'http://www.ivoa.net/xml/UWS/v1.0'}
 
 
 _casda_base_url_vo_prod = "https://data.csiro.au/casda_vo_proxy/vo/"
@@ -67,7 +69,7 @@ def use_dev():
 
 
 def get_soda_async_url():
-    return _casda_soda_base_url + "soda/async"
+    return _casda_soda_base_url + "data/async"
 
 
 def get_datalink_url(dataproduct_id):
@@ -118,7 +120,7 @@ def parse_datalink_for_authenticated_datalink_url(filename):
     votable = parse(filename, pedantic=False)
     results = next(resource for resource in votable.resources if
                    resource.type == "results")
-    if results == None:
+    if results is None:
         return None
     results_array = results.tables[0].array
 
@@ -147,7 +149,7 @@ def retrieve_data_link_to_file(dataproduct_id,
     authenticated_datalink_url = parse_datalink_for_authenticated_datalink_url(
         filename)
     # If the authenticated datalink url wasn't in the file, it means we went straight to the secure datalink details
-    if authenticated_datalink_url != None:
+    if authenticated_datalink_url is not None:
         # This overwrites the file with the data from the secure datalink endpoint
         filename = retrieve_direct_data_link_to_file(dataproduct_id, username,
                                                      password,
@@ -190,10 +192,10 @@ def parse_datalink_for_service_and_id(filename, service_name):
 
 
 def get_service_link_and_id(dataproduct_id,
-                               username, password,
-                               image_cube_datalink_link_url=None,
-                               destination_dir=None,
-                               file_write_mode='wb',
+                            username, password,
+                            image_cube_datalink_link_url=None,
+                            destination_dir=None,
+                            file_write_mode='wb',
                             service='cutout_service'):
     filename = retrieve_data_link_to_file(dataproduct_id,
                                           username,
@@ -210,7 +212,6 @@ def add_params_to_async_job(job_location, param_key, param_values, verbose=False
 
     req = urllib2.Request(job_location+"/parameters")
     data = urllib.urlencode(params)
-    #print data
     try:
         u = urllib2.urlopen(req, data)
         if verbose:
@@ -236,13 +237,21 @@ def read_job_status(job_details_xml, ns=_uws_ns):
 
 
 def run_async_job(job_location, poll_interval=20):
-    # 6) Start the async job
+    """
+    Start an async job (e.g. TAP or SODA) and wait for it to be completed.
+
+    :param job_location: The url to query the job status and details
+    :param poll_interval: The number of seconds to wait between checks on the status of the job.
+    :return: The single word status of the job. Normally COMPLETED or ERROR
+    """
+    
+    # Start the async job
     print ("\n\n** Starting the retrieval job...\n\n")
     req = urllib2.Request(job_location+"/phase")
-    data = urllib.urlencode({'phase':'RUN'})
-    u = urllib2.urlopen(req, data)
+    data = urllib.urlencode({'phase': 'RUN'})
+    response = urllib2.urlopen(req, data)
 
-    # 7) Poll until the async job has finished
+    # Poll until the async job has finished
     job_details = get_job_details_xml(job_location)
     status = read_job_status(job_details)
     while status == 'EXECUTING' or status == 'QUEUED' or status == 'PENDING':
@@ -253,24 +262,42 @@ def run_async_job(job_location, poll_interval=20):
         status = read_job_status(job_details)
     return status
 
+
 def download_result_file(result, destination_dir=None, write_mode='wb'):
-    """ Downloads a result file, where input is an xml result entry from the async job response xml """
+    """
+    Downloads a result file, where input is an xml result entry from the async job response xml.
+
+    :param result: The xml result entry specfying the details of an individual file.
+    :param destination_dir: The directory where the file will be downloaded to. If not specified the file will be saved
+            to the "temp" folder in the current directory.
+    :param write_mode: The mode in which the file will be written.
+    :return: None
+    """
     file_location = urllib.unquote(result.get("{http://www.w3.org/1999/xlink}href")).decode('utf8')
-    u = urllib2.urlopen(file_location)
+    response = urllib2.urlopen(file_location)
     name = filter(bool, file_location.split("/"))[-1]
-    header_cd = u.info().getheaders("Content-Disposition")
-    if not header_cd == None and len(header_cd) > 0:
-        result = re.findall("filename=(\S+)", header_cd[0])
-        if not result == None and len(result) > 0:
+    header_cd = response.info().getheaders("Content-Disposition")
+    if header_cd is not None and len(header_cd) > 0:
+        result = re.findall('filename=(\S+)', header_cd[0])
+        if result is not None and len(result) > 0:
             name = result[0]
-    file_name = "temp" if destination_dir is None else destination_dir + "/" + name
-    print ("Downloading from", file_location, "to", file_name)
+    file_name = ('temp' if destination_dir is None else destination_dir) + '/' + name
+    print ('Downloading from', file_location, 'to', file_name)
     with open(file_name, write_mode) as f:
-        f.write(u.read())
-    print ("Download complete\n")
+        f.write(response.read())
+    print ('Download complete\n')
 
 
 def download_all(job_location, destination_dir=None, write_mode='wb'):
+    """
+    Download all result files from an async job (e.g. TAP or SODA).
+
+    :param job_location: The url to query the job status and details
+    :param destination_dir: The directory where the files will be downloaded to. If not specified the files will be
+            saved to the "temp" folder in the current directory.
+    :param write_mode: The mode in which the file will be written.
+    :return: None
+    """
     print ("\n\n** Downloading results...\n\n")
     job_details = get_job_details_xml(job_location)
     for result in job_details.find("uws:results", _uws_ns).findall("uws:result", _uws_ns):
@@ -281,3 +308,49 @@ def get_results_page(job_location):
     print (job_location)
     job_id = filter(bool, job_location.split("/"))[-1]
     return _casda_soda_base_url + "requests/" + job_id
+
+
+def find_images(pos_criteria, username, password):
+    """
+    Run an SIA2 query against CASDA to find images and cubes that contain any of the specified locations.
+    See http://www.ivoa.net/documents/SIA/ for how to specify criteria.
+
+    :param pos_criteria: An array of POS criteria (CIRCLE, POLYGON or RANGE) specifying the locations to be found.
+    :param username: The OPAL username of the user.
+    :param password: The OPAL password of the user.
+    :return: A VOTableFile object containing the SIA2 response. This will list the images along with extensive metadata.
+    """
+    url = _casda_query_base_url + _sia2_endpoint
+    req = urllib2.Request(url)
+    # Uses basic auth to securely access the data access information for the image cube
+    base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
+    req.add_header("Authorization", "Basic %s" % base64string)
+    params = list(map((lambda value: ('POS', value)), pos_criteria))
+    data = urllib.urlencode(params)
+
+    response = urllib2.urlopen(req, data)
+    filename = 'temp/sia-resp.xml'
+    with open(filename, 'wb') as f:
+        f.write(response.read())
+    votable = parse(filename, pedantic=False)
+    return votable
+
+
+def get_opal_password(opal_password, password_file):
+    """
+    Retrieve the OPAL password form the user, either from the command line arguments, the file they specified or
+      by asking them to input it
+    :param opal_password: The actual password, if provided via the command line
+    :param password_file: The file containing the password, if provided.
+    :return: The password
+    """
+    if opal_password:
+        return opal_password
+
+    if password_file:
+        with open(password_file, 'r') as fd:
+            password = fd.readlines()[0].strip()
+    else:
+        password = getpass.getpass("Enter your OPAL password: ")
+
+    return password
