@@ -129,7 +129,7 @@ def main():
     password = casda.get_opal_password(args.opal_password, args.password_file)
 
     # Change this to choose which environment to use, prod is the default
-    casda.use_dev()
+    #casda.use_dev()
 
     start = time.time()
     if args.destination_directory is not None and not os.path.exists(args.destination_directory):

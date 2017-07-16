@@ -274,18 +274,24 @@ def download_result_file(result, destination_dir=None, write_mode='wb'):
     :return: None
     """
     file_location = urllib.unquote(result.get("{http://www.w3.org/1999/xlink}href")).decode('utf8')
-    response = urllib2.urlopen(file_location)
-    name = filter(bool, file_location.split("/"))[-1]
-    header_cd = response.info().getheaders("Content-Disposition")
-    if header_cd is not None and len(header_cd) > 0:
-        result = re.findall('filename=(\S+)', header_cd[0])
-        if result is not None and len(result) > 0:
-            name = result[0]
-    file_name = ('temp' if destination_dir is None else destination_dir) + '/' + name
-    print ('Downloading from', file_location, 'to', file_name)
-    with open(file_name, write_mode) as f:
-        f.write(response.read())
-    print ('Download complete\n')
+    try:
+        response = urllib2.urlopen(file_location)
+        name = filter(bool, file_location.split("/"))[-1]
+        header_cd = response.info().getheaders("Content-Disposition")
+        if header_cd is not None and len(header_cd) > 0:
+            result = re.findall('filename=(\S+)', header_cd[0])
+            if result is not None and len(result) > 0:
+                name = result[0]
+        file_name = ('temp' if destination_dir is None else destination_dir) + '/' + name
+        print ('Downloading from', file_location, 'to', file_name)
+        with open(file_name, write_mode) as f:
+            f.write(response.read())
+        print ('Download complete\n')
+    except urllib2.HTTPError as err:
+        if err.code == 404:
+            print ("Unable to download " + file_location)
+        else:
+            raise
 
 
 def download_all(job_location, destination_dir=None, write_mode='wb'):
