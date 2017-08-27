@@ -32,6 +32,8 @@ from astropy.io.votable import parse
 from astropy.coordinates import SkyCoord
 from astropy import units
 
+import casda
+
 # For hidden entry of password
 import getpass
 
@@ -182,16 +184,7 @@ def parse_datalink_for_service_and_id(filename, service_name):
     #print "Authenticated id token for async access:", authenticated_id_token
                         
     return async_url, authenticated_id_token
-    
-def download_result_file(result, file_write_mode):
-    """ Downloads a result file, where input is an xml result entry from the async job response xml """
-    file_location = urllib.unquote(result.get("{http://www.w3.org/1999/xlink}href")).decode('utf8')
-    u = urllib2.urlopen(file_location)
-    file_name = destination_dir + re.findall("filename=(\S+)", u.info().getheaders("Content-Disposition")[0])[0]
-    print "Downloading from", file_location, "to", file_name
-    with open(file_name,file_write_mode) as f:
-        f.write(u.read())
-    print "Download complete\n"
+
 
 def adql_query(url, query_string, filename, username, password, file_write_mode):
     """ Do an adql query, and write the resulting VO Table to a file """
@@ -312,6 +305,6 @@ while status == 'EXECUTING' or status == 'QUEUED' or status == 'PENDING':
 if status == 'COMPLETED':
     print "\n\n** Downloading results...\n\n"
     for result in job_details.find("uws:results", ns).findall("uws:result", ns):
-        download_result_file(result, image_file_write_mode)
+        casda.download_result_file(result, destination_dir=destination_dir)
 else:
     print "Job did not complete: Status was %s with error: %s" % (status, get_error_message(job_details, ns))
