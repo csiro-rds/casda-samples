@@ -11,7 +11,6 @@ import time
 import urllib
 import urllib2
 
-
 # VO Table parsing
 from astropy.io.votable import parse
 # XML parsing
@@ -20,11 +19,15 @@ import xml.etree.ElementTree as ET
 # name space used to understand the XML job details response
 _uws_ns = {'uws': 'http://www.ivoa.net/xml/UWS/v1.0'}
 
-
 _casda_base_url_vo_prod = "https://data.csiro.au/casda_vo_proxy/vo/"
 _casda_base_url_vo_at = "https://daplt.csiro.au/casda_vo_proxy/vo/"
-_casda_base_url_vo_test = "https://castst.csiro.au/casda_vo_proxy/vo/"
-_casda_base_url_vo_dev = "https://casdev.csiro.au/casda_vo_proxy/vo/"
+_casda_base_url_vo_test = "https://daptst.csiro.au/casda_vo_proxy/vo/"
+_casda_base_url_vo_dev = "https://dapdev.csiro.au/casda_vo_proxy/vo/"
+
+_casda_base_url_anon_vo_prod = "https://casda.csiro.au/casda_vo_tools/"
+_casda_base_url_anon_vo_at = "https://casda-at-app.csiro.au/casda_vo_tools/"
+_casda_base_url_anon_vo_test = "https://casda-tst-app.csiro.au/casda_vo_tools/"
+_casda_base_url_anon_vo_dev = "https://casda-dev-app.csiro.au/casda_vo_tools/"
 
 _casda_base_url_soda_prod = "https://casda.csiro.au/casda_data_access/"
 _casda_base_url_soda_at = "https://casda-at-app.csiro.au/casda_data_access/"
@@ -32,9 +35,11 @@ _casda_base_url_soda_test = "https://casda-tst-app.csiro.au/casda_data_access/"
 _casda_base_url_soda_dev = "https://casda-dev-app.csiro.au/casda_data_access/"
 
 _casda_query_base_url = _casda_base_url_vo_prod
+_casda_anon_query_base_url = _casda_base_url_anon_vo_prod
 _casda_soda_base_url = _casda_base_url_soda_prod
 
 _tap_sync_endpoint = "tap/sync"
+_tap_async_endpoint = "tap/async"
 _scs_endpoint = "scs"
 _sia2_endpoint = "sia2/query"
 _ssa_endpoint = "ssa"
@@ -42,34 +47,62 @@ _ssa_endpoint = "ssa"
 
 def use_prod():
     """ Switch this CASDA library instance to use the production CASDA service. The prod instance is the default. """
-    global _casda_query_base_url, _casda_soda_base_url
+    global _casda_query_base_url, _casda_anon_query_base_url, _casda_soda_base_url
     _casda_query_base_url = _casda_base_url_vo_prod
+    _casda_anon_query_base_url = _casda_base_url_anon_vo_prod
     _casda_soda_base_url = _casda_base_url_soda_prod
 
 
 def use_at():
     """ Switch this CASDA library instance to use the acceptance test CASDA service. """
-    global _casda_query_base_url, _casda_soda_base_url
+    global _casda_query_base_url, _casda_anon_query_base_url, _casda_soda_base_url
     _casda_query_base_url = _casda_base_url_vo_at
+    _casda_anon_query_base_url = _casda_base_url_anon_vo_at
     _casda_soda_base_url = _casda_base_url_soda_at
 
 
 def use_test():
     """ Switch this CASDA library instance to use the test CASDA service. """
-    global _casda_query_base_url, _casda_soda_base_url
+    global _casda_query_base_url, _casda_anon_query_base_url, _casda_soda_base_url
     _casda_query_base_url = _casda_base_url_vo_test
+    _casda_anon_query_base_url = _casda_base_url_anon_vo_test
     _casda_soda_base_url = _casda_base_url_soda_test
 
 
 def use_dev():
     """ Switch this CASDA library instance to use the development CASDA service. """
-    global _casda_query_base_url, _casda_soda_base_url
+    global _casda_query_base_url, _casda_anon_query_base_url, _casda_soda_base_url
     _casda_query_base_url = _casda_base_url_vo_dev
+    _casda_anon_query_base_url = _casda_base_url_anon_vo_dev
     _casda_soda_base_url = _casda_base_url_soda_dev
 
 
 def get_soda_async_url():
     return _casda_soda_base_url + "data/async"
+
+
+def get_tap_async_url(proxy=True):
+    """
+    Retrieve the URL of the TAP async service.
+    :param proxy: Should we use the authenticated proxy (defaults to true)
+    :return: The URL of the async TAP service
+    """
+    if proxy:
+        return _casda_query_base_url + _tap_async_endpoint
+    else:
+        return _casda_anon_query_base_url + _tap_async_endpoint
+
+
+def get_tap_sync_url(proxy=True):
+    """
+    Retrieve the URL of the TAP sync service.
+    :param proxy: Should we use the authenticated proxy (defaults to true)
+    :return: The URL of the sync TAP service
+    """
+    if proxy:
+        return _casda_query_base_url + _tap_sync_endpoint
+    else:
+        return _casda_anon_query_base_url + _tap_sync_endpoint
 
 
 def get_datalink_url(dataproduct_id):
@@ -85,8 +118,60 @@ def create_async_soda_job(authenticated_id_tokens, soda_url=None):
 
     req = urllib2.Request(async_url)
     data = urllib.urlencode(id_params)
-    print ("Creating job: " + async_url + "?" + data)
+    print("Creating job: " + async_url + "?" + data)
     u = urllib2.urlopen(req, data)
+    # print u.read()
+    return u.geturl()
+
+
+def sync_tap_query(query_string, filename, username=None, password=None,
+                                      file_write_mode='wb', tap_url=None):
+    """
+    Run an adql (TAP) query, and write the resulting VO Table to a file
+    :param query_string: The ADQL query to be run
+    :param filename: The name of the file where the query result should be saved.
+    :param username: The OPAL username (if an authenticated query is required)
+    :param password: The OPAL password (if an authenticated query is required)
+    :param file_write_mode:  A string indicating how the file is to be opened (defaults to wb)
+    :param tap_url: The URL of the TAP service, if a custom address is needed.
+    :return: The path to the votable file
+    """
+    authenticated = password is not None
+    sync_url = tap_url if tap_url else get_tap_sync_url(proxy=authenticated)
+
+    req = urllib2.Request(sync_url)
+    if authenticated:
+        # Use basic auth to query as a specific user
+        base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
+        req.add_header("Authorization", "Basic %s" % base64string)
+    #print (req)
+    data = urllib.urlencode({'query':query_string, 'request':'doQuery', 'lang':'ADQL', 'format':'votable'})
+    u = urllib2.urlopen(req, data)
+    with open(filename,file_write_mode) as f:
+        f.write(u.read())
+    return filename
+
+
+def create_async_tap_job(username=None, password=None, tap_url=None):
+    """
+    Creates the async Table Access Protocol job, returning the url to query the job status and details
+    :param username: The OPAL username (if an authenticated query is required)
+    :param password: The OPAL password (if an authenticated query is required)
+    :param tap_url: The URL of the TAP service, if a custom address is needed.
+    :return: The URL of the async job.
+    """
+    authenticated = password is not None
+    async_url = tap_url if tap_url else get_tap_async_url(proxy=authenticated)
+
+    req = urllib2.Request(async_url)
+
+    if authenticated:
+        # Use basic auth to query as a specific user
+        base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
+        req.add_header("Authorization", "Basic %s" % base64string)
+
+    print("Creating job: " + async_url)
+    u = urllib2.urlopen(req, {})
     # print u.read()
     return u.geturl()
 
@@ -99,7 +184,7 @@ def retrieve_direct_data_link_to_file(dataproduct_id,
     """ Read data link info for a given image cube to a file, returns the filename for this information """
     # Data link url for a given image cube
     url = get_datalink_url(dataproduct_id) if image_cube_datalink_link_url is None else image_cube_datalink_link_url
-    print (url, image_cube_datalink_link_url)
+    print(url, image_cube_datalink_link_url)
     request = urllib2.Request(url)
     # Uses basic auth to securely access the data access information for the image cube
     base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
@@ -206,18 +291,23 @@ def get_service_link_and_id(dataproduct_id,
     return parse_datalink_for_service_and_id(filename, service)
 
 
-def add_params_to_async_job(job_location, param_key, param_values, verbose=False):
+def add_param_to_async_job(job_location, param_key, param_value, verbose=False):
     """ Add filter params the async job """
+    add_params_to_async_job(job_location, param_key, [param_value, ], verbose=False)
+
+
+def add_params_to_async_job(job_location, param_key, param_values, verbose=False):
+    """ Add multiple values for a filter parameter to the async job """
     params = list(map((lambda value: (param_key, value)), param_values))
 
-    req = urllib2.Request(job_location+"/parameters")
+    req = urllib2.Request(job_location + "/parameters")
     data = urllib.urlencode(params)
     try:
         u = urllib2.urlopen(req, data)
         if verbose:
-            print (u.read())
+            print(u.read())
     except IOError as e:
-        print ("Unable to add %s parameters %s due to error %s" % (param_key, param_values, e))
+        print("Unable to add %s parameters %s due to error %s" % (param_key, param_values, e))
         raise
 
 
@@ -244,10 +334,10 @@ def run_async_job(job_location, poll_interval=20):
     :param poll_interval: The number of seconds to wait between checks on the status of the job.
     :return: The single word status of the job. Normally COMPLETED or ERROR
     """
-    
+
     # Start the async job
-    print ("\n\n** Starting the retrieval job...\n\n")
-    req = urllib2.Request(job_location+"/phase")
+    print("\n\n** Starting the retrieval job...\n\n")
+    req = urllib2.Request(job_location + "/phase")
     data = urllib.urlencode({'phase': 'RUN'})
     response = urllib2.urlopen(req, data)
 
@@ -255,9 +345,9 @@ def run_async_job(job_location, poll_interval=20):
     job_details = get_job_details_xml(job_location)
     status = read_job_status(job_details)
     while status == 'EXECUTING' or status == 'QUEUED' or status == 'PENDING':
-        print ("Job %s, waiting for %d seconds." % (status, poll_interval))
+        print("Job %s, waiting for %d seconds." % (status, poll_interval))
         time.sleep(poll_interval)
-        print ("Polling job status")
+        print("Polling job status")
         job_details = get_job_details_xml(job_location)
         status = read_job_status(job_details)
     return status
@@ -271,7 +361,7 @@ def download_result_file(result, destination_dir=None, write_mode='wb'):
     :param destination_dir: The directory where the file will be downloaded to. If not specified the file will be saved
             to the "temp" folder in the current directory.
     :param write_mode: The mode in which the file will be written.
-    :return: None
+    :return: The file name
     """
     file_location = urllib.unquote(result.get("{http://www.w3.org/1999/xlink}href")).decode('utf8')
     try:
@@ -283,13 +373,20 @@ def download_result_file(result, destination_dir=None, write_mode='wb'):
             if result is not None and len(result) > 0:
                 name = result[0]
         file_name = ('temp' if destination_dir is None else destination_dir) + '/' + name
-        print ('Downloading from', file_location, 'to', file_name)
+        print('Downloading from', file_location, 'to', file_name)
+        block_size = 64 * 1024
         with open(file_name, write_mode) as f:
-            f.write(response.read())
-        print ('Download complete\n')
+            while True:
+                block = response.read(block_size)
+                if len(block) == 0:
+                    break
+                f.write(block)
+        print('Download complete\n')
+        return file_name
     except urllib2.HTTPError as err:
         if err.code == 404:
-            print ("Unable to download " + file_location)
+            print("Unable to download " + file_location)
+            return None
         else:
             raise
 
@@ -302,21 +399,25 @@ def download_all(job_location, destination_dir=None, write_mode='wb'):
     :param destination_dir: The directory where the files will be downloaded to. If not specified the files will be
             saved to the "temp" folder in the current directory.
     :param write_mode: The mode in which the file will be written.
-    :return: None
+    :return: A list of the filenames downloaded
     """
-    print ("\n\n** Downloading results...\n\n")
+    print("\n\n** Downloading results...\n\n")
     job_details = get_job_details_xml(job_location)
+    filenames = []
     for result in job_details.find("uws:results", _uws_ns).findall("uws:result", _uws_ns):
-        download_result_file(result, destination_dir=destination_dir, write_mode=write_mode)
+        fn = download_result_file(result, destination_dir=destination_dir, write_mode=write_mode)
+        if fn:
+            filenames.append(fn)
+    return filenames
 
 
 def get_results_page(job_location):
-    print (job_location)
+    print(job_location)
     job_id = filter(bool, job_location.split("/"))[-1]
     return _casda_soda_base_url + "requests/" + job_id
 
 
-def find_images(pos_criteria, username, password):
+def find_images(pos_criteria, username, password, maxrec=0):
     """
     Run an SIA2 query against CASDA to find images and cubes that contain any of the specified locations.
     See http://www.ivoa.net/documents/SIA/ for how to specify criteria.
@@ -332,7 +433,10 @@ def find_images(pos_criteria, username, password):
     base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
     req.add_header("Authorization", "Basic %s" % base64string)
     params = list(map((lambda value: ('POS', value)), pos_criteria))
+    if maxrec > 0:
+        params.append(('MAXREC', maxrec))
     data = urllib.urlencode(params)
+    print(url)
 
     response = urllib2.urlopen(req, data)
     filename = 'temp/sia-resp.xml'

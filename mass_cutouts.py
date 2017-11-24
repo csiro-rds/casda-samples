@@ -30,7 +30,7 @@ def parseargs():
     parser.add_argument("opal_username",
                         help="Your user name on the ATNF's online proposal system (normally an email address)")
     parser.add_argument("-p", "--opal_password", help="Your password on the ATNF's online proposal system")
-    parser.add_argument("--passwordfile", help="The file holding your password for the ATNF's online proposal system")
+    parser.add_argument("--password_file", help="The file holding your password for the ATNF's online proposal system")
     parser.add_argument("cubeid", help="The identifier of the image cube to be accessed e.g. cube-1")
     parser.add_argument("-d", "--destination_directory", help="The directory where the resulting files will be stored",
                         default="cutouts")
@@ -41,25 +41,6 @@ def parseargs():
 
     args = parser.parse_args()
     return args
-
-
-def get_opal_password(args):
-    """
-    Retrieve the OPAL password form the user, either form the command line arguments, the file they specified or
-      by asking them to input it
-    :param args: The parsed command line arguments
-    :return: The password
-    """
-    if args.opal_password:
-        return args.opal_password
-
-    if args.passwordfile:
-        with open(args.passwordfile, 'r') as fd:
-            password = fd.readlines()[0].strip()
-    else:
-        password = getpass.getpass("Enter your OPAL password: ")
-
-    return password
 
 
 def get_dimensions(cube_id):
@@ -118,7 +99,7 @@ def generate_random_cutouts(args, cube_dim):
 
 def main():
     args = parseargs()
-    password = get_opal_password(args)
+    password = casda.get_opal_password(args.opal_password, args.password_file)
 
     # Change this to choose which environment to use, prod is the default
     casda.use_at()
