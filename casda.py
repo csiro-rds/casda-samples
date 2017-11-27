@@ -4,17 +4,16 @@
 
 from __future__ import print_function, division
 
-import base64
 import getpass
 import re
 import time
 import urllib
-import urllib2
 
 # VO Table parsing
 from astropy.io.votable import parse
+import requests
 # XML parsing
-import xml.etree.ElementTree as ET
+from xml.etree import ElementTree
 
 # name space used to understand the XML job details response
 _uws_ns = {'uws': 'http://www.ivoa.net/xml/UWS/v1.0'}
@@ -116,16 +115,12 @@ def create_async_soda_job(authenticated_id_tokens, soda_url=None):
             authenticated_id_tokens))
     async_url = soda_url if soda_url else get_soda_async_url()
 
-    req = urllib2.Request(async_url)
-    data = urllib.urlencode(id_params)
-    print("Creating job: " + async_url + "?" + data)
-    u = urllib2.urlopen(req, data)
-    # print u.read()
-    return u.geturl()
+    resp = requests.post(async_url, params=id_params)
+    return resp.url
 
 
 def sync_tap_query(query_string, filename, username=None, password=None,
-                                      file_write_mode='wb', tap_url=None):
+                   file_write_mode='wb', tap_url=None):
     """
     Run an adql (TAP) query, and write the resulting VO Table to a file
     :param query_string: The ADQL query to be run
@@ -139,16 +134,14 @@ def sync_tap_query(query_string, filename, username=None, password=None,
     authenticated = password is not None
     sync_url = tap_url if tap_url else get_tap_sync_url(proxy=authenticated)
 
-    req = urllib2.Request(sync_url)
+    params = {'query': query_string, 'request': 'doQuery', 'lang': 'ADQL', 'format': 'votable'}
     if authenticated:
-        # Use basic auth to query as a specific user
-        base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
-        req.add_header("Authorization", "Basic %s" % base64string)
-    #print (req)
-    data = urllib.urlencode({'query':query_string, 'request':'doQuery', 'lang':'ADQL', 'format':'votable'})
-    u = urllib2.urlopen(req, data)
-    with open(filename,file_write_mode) as f:
-        f.write(u.read())
+        response = requests.get(sync_url, params=params, auth=(username, password))
+    else:
+        response = requests.get(sync_url, params=params)
+    response.raise_for_status()
+    with open(filename, file_write_mode) as f:
+        f.write(response.text)
     return filename
 
 
@@ -163,17 +156,13 @@ def create_async_tap_job(username=None, password=None, tap_url=None):
     authenticated = password is not None
     async_url = tap_url if tap_url else get_tap_async_url(proxy=authenticated)
 
-    req = urllib2.Request(async_url)
-
-    if authenticated:
-        # Use basic auth to query as a specific user
-        base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
-        req.add_header("Authorization", "Basic %s" % base64string)
-
     print("Creating job: " + async_url)
-    u = urllib2.urlopen(req, {})
-    # print u.read()
-    return u.geturl()
+    if authenticated:
+        response = requests.post(async_url, auth=(username, password))
+    else:
+        response = requests.post(async_url)
+
+    return response.url
 
 
 def retrieve_direct_data_link_to_file(dataproduct_id,
@@ -185,14 +174,10 @@ def retrieve_direct_data_link_to_file(dataproduct_id,
     # Data link url for a given image cube
     url = get_datalink_url(dataproduct_id) if image_cube_datalink_link_url is None else image_cube_datalink_link_url
     print(url, image_cube_datalink_link_url)
-    request = urllib2.Request(url)
-    # Uses basic auth to securely access the data access information for the image cube
-    base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
-    request.add_header("Authorization", "Basic %s" % base64string)
+    response = requests.get(url, auth=(username, password))
 
     # Save the data access vo table information to a file: eg C:/temp/datalink-cube-1234.xml
-    result = urllib2.urlopen(request)
-    data = result.read()
+    data = response.content
     filename = destination_dir + "/datalink-" + dataproduct_id + ".xml"
     with open(filename, file_write_mode) as f:
         f.write(data)
@@ -300,12 +285,11 @@ def add_params_to_async_job(job_location, param_key, param_values, verbose=False
     """ Add multiple values for a filter parameter to the async job """
     params = list(map((lambda value: (param_key, value)), param_values))
 
-    req = urllib2.Request(job_location + "/parameters")
-    data = urllib.urlencode(params)
     try:
-        u = urllib2.urlopen(req, data)
+        response = requests.post(job_location + "/parameters", data=params)
+        response.raise_for_status()
         if verbose:
-            print(u.read())
+            print(response.text)
     except IOError as e:
         print("Unable to add %s parameters %s due to error %s" % (param_key, param_values, e))
         raise
@@ -313,11 +297,9 @@ def add_params_to_async_job(job_location, param_key, param_values, verbose=False
 
 def get_job_details_xml(async_job_url):
     """ Get job details as XML """
-    req = urllib2.Request(async_job_url)
-    u = urllib2.urlopen(req)
-    job_response = u.read()
-    # print job_response
-    return ET.fromstring(job_response)
+    response = requests.get(async_job_url)
+    job_response = response.text
+    return ElementTree.fromstring(job_response)
 
 
 def read_job_status(job_details_xml, ns=_uws_ns):
@@ -337,9 +319,7 @@ def run_async_job(job_location, poll_interval=20):
 
     # Start the async job
     print("\n\n** Starting the retrieval job...\n\n")
-    req = urllib2.Request(job_location + "/phase")
-    data = urllib.urlencode({'phase': 'RUN'})
-    response = urllib2.urlopen(req, data)
+    response = requests.post(job_location + "/phase", data={'phase': 'RUN'})
 
     # Poll until the async job has finished
     job_details = get_job_details_xml(job_location)
@@ -364,31 +344,32 @@ def download_result_file(result, destination_dir=None, write_mode='wb'):
     :return: The file name
     """
     file_location = urllib.unquote(result.get("{http://www.w3.org/1999/xlink}href")).decode('utf8')
-    try:
-        response = urllib2.urlopen(file_location)
-        name = filter(bool, file_location.split("/"))[-1]
-        header_cd = response.info().getheaders("Content-Disposition")
+    response = requests.get(file_location, stream=True)
+    if response.status_code != requests.codes.ok:
+        if response.status_code == 404:
+            print("Unable to download " + file_location)
+            return None
+        else:
+            response.raise_for_status()
+
+    name = filter(bool, file_location.split("/"))[-1]
+    if 'Content-Disposition' in response.headers:
+        header_cd = response.headers['Content-Disposition']
         if header_cd is not None and len(header_cd) > 0:
             result = re.findall('filename=(\S+)', header_cd[0])
             if result is not None and len(result) > 0:
                 name = result[0]
-        file_name = ('temp' if destination_dir is None else destination_dir) + '/' + name
-        print('Downloading from', file_location, 'to', file_name)
-        block_size = 64 * 1024
-        with open(file_name, write_mode) as f:
-            while True:
-                block = response.read(block_size)
-                if len(block) == 0:
-                    break
-                f.write(block)
-        print('Download complete\n')
-        return file_name
-    except urllib2.HTTPError as err:
-        if err.code == 404:
-            print("Unable to download " + file_location)
-            return None
-        else:
-            raise
+    content_len = ""
+    if 'Content-Length' in response.headers:
+        content_len = str(response.headers['Content-Length']) + ' bytes'
+    file_name = ('temp' if destination_dir is None else destination_dir) + '/' + name
+    print('Downloading {} from {} to {}'.format(content_len, file_location, file_name))
+    block_size = 64 * 1024
+    with open(file_name, write_mode) as f:
+        for chunk in response.iter_content(chunk_size=block_size):
+            f.write(chunk)
+    print('Download complete\n')
+    return file_name
 
 
 def download_all(job_location, destination_dir=None, write_mode='wb'):
@@ -425,23 +406,20 @@ def find_images(pos_criteria, username, password, maxrec=0):
     :param pos_criteria: An array of POS criteria (CIRCLE, POLYGON or RANGE) specifying the locations to be found.
     :param username: The OPAL username of the user.
     :param password: The OPAL password of the user.
+    :param maxrec: The maximum number of images to retrieve, default is no limit
     :return: A VOTableFile object containing the SIA2 response. This will list the images along with extensive metadata.
     """
     url = _casda_query_base_url + _sia2_endpoint
-    req = urllib2.Request(url)
-    # Uses basic auth to securely access the data access information for the image cube
-    base64string = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
-    req.add_header("Authorization", "Basic %s" % base64string)
     params = list(map((lambda value: ('POS', value)), pos_criteria))
     if maxrec > 0:
         params.append(('MAXREC', maxrec))
-    data = urllib.urlencode(params)
-    print(url)
+    response = requests.get(url, params=params, auth=(username, password))
+    response.raise_for_status()
+    print(response.url)
 
-    response = urllib2.urlopen(req, data)
     filename = 'temp/sia-resp.xml'
     with open(filename, 'wb') as f:
-        f.write(response.read())
+        f.write(response.content)
     votable = parse(filename, pedantic=False)
     return votable
 

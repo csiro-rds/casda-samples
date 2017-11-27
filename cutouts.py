@@ -118,7 +118,7 @@ def main():
         os.makedirs(destination_dir)
 
     # Change this to choose which environment to use, prod is the default
-    casda.use_at()
+    # casda.use_at()
 
 
     catalogue_query = 'SELECT * FROM casda.continuum_component where first_sbid = {} and flux_peak > 500'.format(
