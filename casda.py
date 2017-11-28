@@ -5,6 +5,7 @@
 from __future__ import print_function, division
 
 import getpass
+import os
 import re
 import time
 import urllib
@@ -362,6 +363,9 @@ def download_result_file(result, destination_dir=None, write_mode='wb'):
     content_len = ""
     if 'Content-Length' in response.headers:
         content_len = str(response.headers['Content-Length']) + ' bytes'
+    if destination_dir is None and not os.path.exists('temp'):
+        os.makedirs('temp')
+
     file_name = ('temp' if destination_dir is None else destination_dir) + '/' + name
     print('Downloading {} from {} to {}'.format(content_len, file_location, file_name))
     block_size = 64 * 1024
@@ -415,7 +419,8 @@ def find_images(pos_criteria, username, password, maxrec=0):
         params.append(('MAXREC', maxrec))
     response = requests.get(url, params=params, auth=(username, password))
     response.raise_for_status()
-    print(response.url)
+    if not os.path.exists('temp'):
+        os.makedirs('temp')
 
     filename = 'temp/sia-resp.xml'
     with open(filename, 'wb') as f:
