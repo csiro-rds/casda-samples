@@ -13,7 +13,7 @@
 #
 #############################################################################################
 
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 
 import argparse
 import os
@@ -45,7 +45,7 @@ def parseargs():
     return args
 
 
-def download_images(ra, dec, username, password, destination_dir):
+def download_images(ra, dec, username, password, destination_dir, max_images=3):
     if ra.find(':') > -1 or ra.find('h') > -1:
         sky_loc = SkyCoord(ra, dec, frame='icrs', unit=(units.hourangle, units.deg))
     else:
@@ -57,18 +57,20 @@ def download_images(ra, dec, username, password, destination_dir):
     print ("\n\n** Finding images and image cubes ... \n\n")
     image_cube_votable = casda.find_images([sky_region_query, ], username, password)
     results_array = image_cube_votable.get_table_by_id('results').array
-    #print results_array
+    # print results_array
 
     # 3) For each of the image cubes, query datalink to get the secure datalink details
     print ("\n\n** Retrieving datalink for each image and image cube...\n\n")
     authenticated_id_tokens = []
     for image_cube_result in results_array:
-        image_cube_id = image_cube_result['obs_publisher_did']
-        async_url, authenticated_id_token = casda.get_service_link_and_id(image_cube_id, username,
+        image_cube_id = image_cube_result['obs_publisher_did'].decode('utf-8')
+        # A test like the following can be used to further filter images retrieved.
+        # if row['dataproduct_subtype'].decode() == 'cont.restored.t0':
+        sync_url, authenticated_id_token = casda.get_service_link_and_id(image_cube_id, username,
                                                                           password,
                                                                           service='spectrum_generation_service',
                                                                           destination_dir=destination_dir)
-        if authenticated_id_token is not None and len(authenticated_id_tokens) < 10:
+        if authenticated_id_token is not None and (max_images <= 0 or len(authenticated_id_tokens) < max_images):
             authenticated_id_tokens.append(authenticated_id_token)
 
     if len(authenticated_id_tokens) == 0:
@@ -97,7 +99,7 @@ def main():
         os.makedirs(destination_dir)
 
     # Change this to choose which environment to use, prod is the default
-    #casda.use_test()
+    # casda.use_dev()
 
     return download_images(args.ra, args.dec, args.opal_username, password, destination_dir)
 

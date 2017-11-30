@@ -2,13 +2,16 @@
 
 # Author: James Dempsey
 
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 
 import getpass
 import os
 import re
 import time
-import urllib
+
+from six import PY3
+from six.moves.urllib.parse import unquote
+
 
 # VO Table parsing
 from astropy.io.votable import parse
@@ -142,7 +145,7 @@ def sync_tap_query(query_string, filename, username=None, password=None,
         response = requests.get(sync_url, params=params)
     response.raise_for_status()
     with open(filename, file_write_mode) as f:
-        f.write(response.text)
+        f.write(response.content)
     return filename
 
 
@@ -176,6 +179,7 @@ def retrieve_direct_data_link_to_file(dataproduct_id,
     url = get_datalink_url(dataproduct_id) if image_cube_datalink_link_url is None else image_cube_datalink_link_url
     print(url, image_cube_datalink_link_url)
     response = requests.get(url, auth=(username, password))
+    response.raise_for_status()
 
     # Save the data access vo table information to a file: eg C:/temp/datalink-cube-1234.xml
     data = response.content
@@ -245,7 +249,7 @@ def parse_datalink_for_service_and_id(filename, service_name):
 
     # Find the authenticated id token for accessing the image cube
     for x in results_array:
-        if x['service_def'] == service_name:
+        if x['service_def'].decode("utf8") == service_name:
             authenticated_id_token = x['authenticated_id_token']
 
     # Find the async url
@@ -344,7 +348,7 @@ def download_result_file(result, destination_dir=None, write_mode='wb'):
     :param write_mode: The mode in which the file will be written.
     :return: The file name
     """
-    file_location = urllib.unquote(result.get("{http://www.w3.org/1999/xlink}href")).decode('utf8')
+    file_location = unquote(result.get("{http://www.w3.org/1999/xlink}href"))
     response = requests.get(file_location, stream=True)
     if response.status_code != requests.codes.ok:
         if response.status_code == 404:
@@ -353,7 +357,7 @@ def download_result_file(result, destination_dir=None, write_mode='wb'):
         else:
             response.raise_for_status()
 
-    name = filter(bool, file_location.split("/"))[-1]
+    name = list(filter(bool, file_location.split("/")))[-1]
     if 'Content-Disposition' in response.headers:
         header_cd = response.headers['Content-Disposition']
         if header_cd is not None and len(header_cd) > 0:
@@ -398,7 +402,7 @@ def download_all(job_location, destination_dir=None, write_mode='wb'):
 
 def get_results_page(job_location):
     print(job_location)
-    job_id = filter(bool, job_location.split("/"))[-1]
+    job_id = list(filter(bool, job_location.split("/")))[-1]
     return _casda_soda_base_url + "requests/" + job_id
 
 
@@ -444,6 +448,9 @@ def get_opal_password(opal_password, password_file):
         with open(password_file, 'r') as fd:
             password = fd.readlines()[0].strip()
     else:
-        password = getpass.getpass("Enter your OPAL password: ")
+        if PY3:
+            password = getpass.getpass("Enter your OPAL password: ")
+        else:
+            password = getpass.getpass(str("Enter your OPAL password: "))
 
     return password

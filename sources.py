@@ -14,8 +14,7 @@
 #
 #############################################################################################
 
-###### IMPORTS ######
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 
 import argparse
 import os
@@ -27,7 +26,7 @@ from astropy import units
 import casda
 
 
-cutout_radius_degrees = 0.1 # The radius of the cutouts you want to generate
+cutout_radius_degrees = 0.1  # The radius of the cutouts you want to generate
 
 
 def parseargs():
@@ -41,7 +40,8 @@ def parseargs():
     parser.add_argument("-p", "--opal_password", help="Your password on the ATNF's online proposal system")
     parser.add_argument("--password_file", help="The file holding your password for the ATNF's online proposal system")
     parser.add_argument("image_id", help="The id of the target image.")
-    parser.add_argument("source_list_file", help="The file holding the list of positions, with one RA and Dec pair per line.")
+    parser.add_argument("source_list_file",
+                        help="The file holding the list of positions, with one RA and Dec pair per line.")
     parser.add_argument("destination_directory", help="The directory where the resulting files will be stored")
 
     args = parser.parse_args()
@@ -76,9 +76,10 @@ def parse_sources_file(filename):
 
 def produce_cutouts(source_list, image_id, username, password, destination_dir):
     # Use CASDA VO (secure) to query for the images associated with the given scheduling_block_id
-    print ("\n\n** Retreiving image details for %s ... \n\n" % (image_id))
+    print ("\n\n** Retreiving image details for %s ... \n\n" % image_id)
     filename = destination_dir + str(image_id) + ".xml"
-    data_product_id_query = "select * from ivoa.obscore where obs_publisher_did = '" + image_id + "' and dataproduct_type = 'cube'"
+    data_product_id_query = "select * from ivoa.obscore where obs_publisher_did = '" + image_id + \
+                            "' and dataproduct_type = 'cube'"
     casda.sync_tap_query(data_product_id_query, filename, username=username, password=password)
     image_cube_votable = votable.parse(filename, pedantic=False)
     results_array = image_cube_votable.get_table_by_id('results').array
@@ -87,7 +88,7 @@ def produce_cutouts(source_list, image_id, username, password, destination_dir):
     print ("\n\n** Retrieving datalink for each image and image cube...\n\n")
     authenticated_id_tokens = []
     for image_cube_result in results_array:
-        image_cube_id = image_cube_result['obs_publisher_did']
+        image_cube_id = image_cube_result['obs_publisher_did'].decode('utf-8')
         async_url, authenticated_id_token = casda.get_service_link_and_id(image_cube_id, username,
                                                                           password,
                                                                           service='cutout_service',
@@ -102,18 +103,16 @@ def produce_cutouts(source_list, image_id, username, password, destination_dir):
     # Create the async job
     job_location = casda.create_async_soda_job(authenticated_id_tokens)
 
-    # For each of the entries in the results of the catalogue query, add the position filter as a parameter to the async job
+    # For each entry in the results of the catalogue query, add the position filter as a parameter to the async job
     cutout_filters = []
     for sky_loc in source_list:
         ra = sky_loc.ra.degree
         dec = sky_loc.dec.degree
-        #print ra, dec, cutout_radius_degrees
-        filter = "CIRCLE " + str(ra) + " " + str(dec) + " " + str(cutout_radius_degrees)
-        cutout_filters.append(filter)
+        circle = "CIRCLE " + str(ra) + " " + str(dec) + " " + str(cutout_radius_degrees)
+        cutout_filters.append(circle)
     casda.add_params_to_async_job(job_location, 'pos', cutout_filters)
 
     # Run the job
-    print ("\n\n** Starting the retrieval job...\n\n")
     status = casda.run_async_job(job_location)
 
     # Download all of the files, or alert if it didn't complete
@@ -121,7 +120,7 @@ def produce_cutouts(source_list, image_id, username, password, destination_dir):
         print ("\n\n** Downloading results...\n\n")
         casda.download_all(job_location, destination_dir)
     else:
-        print ("Job did not complete: Status was %s." % (status))
+        print ("Job did not complete: Status was %s." % status)
         return 1
     return 0
 
@@ -133,7 +132,7 @@ def main():
     # Change this to choose which environment to use, prod is the default
     # casda.use_dev()
 
-    destination_dir = args.destination_directory + "/" + str(args.image_id) + "/"  # directory the files will be saved to
+    destination_dir = args.destination_directory + "/" + str(args.image_id) + "/"  # directory where files will be saved
 
     # 1) Read in the list of sources
     print ("\n\n** Parsing the source list ...\n")
