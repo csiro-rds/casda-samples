@@ -19,6 +19,8 @@
 #
 #############################################################################################
 
+from __future__ import print_function, division, unicode_literals
+
 import argparse
 import os
 
@@ -63,7 +65,7 @@ def download_cutouts(sbid, username, password, destination_dir, catalogue_query,
     print ("\n\n** Retrieving datalink for each image and image cube...\n\n")
     authenticated_id_tokens = []
     for image_cube_result in results_array:
-        image_cube_id = image_cube_result['obs_publisher_did']
+        image_cube_id = image_cube_result['obs_publisher_did'].decode('utf-8')
         async_url, authenticated_id_token = casda.get_service_link_and_id(image_cube_id, username,
                                                                           password,
                                                                           service=service,

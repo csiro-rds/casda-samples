@@ -3,7 +3,7 @@
 # Generate and download spectra of a list of locations. To see the command line usage help, use
 # python get_spectra.py -h
 
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 
 from astropy.coordinates import SkyCoord
 from astropy import units
@@ -103,8 +103,8 @@ def extract_spectra(source_list, cutout_radius_degrees, opal_username, opal_pass
     authenticated_ids = []
     for row in table.array:
         # We are only interested in the restored spectral line cubes
-        if row['dataproduct_subtype'] == 'spectral.restored.3d':
-            data_product_id = row['obs_publisher_did']
+        if row['dataproduct_subtype'].decode() == 'spectral.restored.3d':
+            data_product_id = row['obs_publisher_did'].decode('utf-8')
             async_url, authenticated_id_token = casda.get_service_link_and_id(data_product_id, opal_username,
                                                                               opal_password,
                                                                               service='spectrum_generation_service',
@@ -129,7 +129,7 @@ def main():
     password = casda.get_opal_password(args.opal_password, args.password_file)
 
     # Change this to choose which environment to use, prod is the default
-    #casda.use_dev()
+    # casda.use_at()
 
     start = time.time()
     if args.destination_directory is not None and not os.path.exists(args.destination_directory):

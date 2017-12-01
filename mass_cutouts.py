@@ -6,17 +6,16 @@ from __future__ import print_function, division
 
 import argparse
 import casda
-import getpass
 import json
 import numpy as np
 import os
 import time
 
 _large_cutout_s_len = 100
-#_medium_cutout_s_len = 40
+# _medium_cutout_s_len = 40
 _small_cutout_s_len = 20
 _large_cutout_em_len = 60
-#_medium_cutout_em_len = 30
+# _medium_cutout_em_len = 30
 _small_cutout_em_len = 10
 _c = 2.9979e8
 
@@ -35,7 +34,7 @@ def parseargs():
     parser.add_argument("-d", "--destination_directory", help="The directory where the resulting files will be stored",
                         default="cutouts")
     parser.add_argument("-s", "--num_small", help="The number of small cutouts to be produced", default=20, type=int)
-    # parser.add_argument("-m", "--num_medium", help="The number of medium cutouts to be produced", default=20, type=int)
+    # parser.add_argument("-m", "--num_medium", help="The number of medium cutouts to be produced", default=20,type=int)
     parser.add_argument("-l", "--num_large", help="The number of large cutouts to be produced", default=20, type=int)
     parser.add_argument("--download", help="Download the produced cutouts", action='store_true')
 
@@ -44,7 +43,10 @@ def parseargs():
 
 
 def get_dimensions(cube_id):
-    """ For this test data we will use a predefined dimension object, but this could be read from the TAP service. """
+    """
+    For this test data we will use a predefined dimension object matching cube-420 in the acceptance environment,
+    but this could be read from the TAP service.
+    """
 
     dims = json.loads(
         '{"axes": [{"name": "RA", "numPixels": "4096", "pixelSize": "5.5555555555560e-04", "pixelUnit": "deg"},' +
@@ -66,21 +68,22 @@ def generate_random_cutouts(args, cube_dim):
 
     # random centres on RA/dec axis - random pixels linearly converted to spatial, so avoid edges
     ra_axis = cube_dim['axes'][0]
-    ra_start =  float(cube_dim['corners'][1]['RA'])
+    ra_start = float(cube_dim['corners'][1]['RA'])
     ra_max = int(ra_axis['numPixels']) - _large_cutout_s_len - 10
     ra_vals = np.random.random_integers(10, ra_max, total_cutouts)
     ra_vals = ra_vals * float(ra_axis['pixelSize']) + ra_start
     dec_axis = cube_dim['axes'][1]
-    dec_start =  float(cube_dim['corners'][1]['DEC'])
+    dec_start = float(cube_dim['corners'][1]['DEC'])
     dec_max = int(dec_axis['numPixels']) - _large_cutout_s_len - 10
     dec_vals = np.random.random_integers(10, dec_max, total_cutouts) * float(dec_axis['pixelSize']) + dec_start
 
     # loop through producing circle params, use small and large radii
     pos_params = []
     for i in range(0, total_cutouts):
-        cutout_radius_degrees = (_large_cutout_s_len if i < args.num_large else _small_cutout_s_len) * float(ra_axis['pixelSize'])
-        filter = "CIRCLE " + str(ra_vals[i]) + " " + str(dec_vals[i]) + " " + str(cutout_radius_degrees)
-        pos_params.append(filter)
+        cutout_radius_degrees = (_large_cutout_s_len if i < args.num_large else _small_cutout_s_len) * float(
+            ra_axis['pixelSize'])
+        circle = "CIRCLE " + str(ra_vals[i]) + " " + str(dec_vals[i]) + " " + str(cutout_radius_degrees)
+        pos_params.append(circle)
 
     # random start locations on freq axis - random pixels converted to axis values
     freq_axis = cube_dim['axes'][3]
@@ -89,9 +92,9 @@ def generate_random_cutouts(args, cube_dim):
     band_params = []
     for i in range(0, len(freq_vals)):
         freq_min = freq_vals[i] + float(freq_axis['min'])
-        em_len =  _large_cutout_em_len if i == 0 else _small_cutout_em_len
+        em_len = _large_cutout_em_len if i == 0 else _small_cutout_em_len
         freq_max = freq_min + (em_len - 1) * float(freq_axis['pixelSize'])
-        #print ("FREQ=", float(freq_axis['min']), freq_min, freq_max)
+        # print ("FREQ=", float(freq_axis['min']), freq_min, freq_max)
         band_params.append(str(_c/freq_max) + " " + str(_c/freq_min))
 
     return pos_params, band_params
@@ -110,12 +113,12 @@ def main():
 
     # Read cube dimensions
     cube_dim = get_dimensions(args.cubeid)
-    #print("DIM=", cube_dim)
+    # print("DIM=", cube_dim)
 
     # Generate random locations in the cutout
     pos_params, band_params = generate_random_cutouts(args, cube_dim)
-    #print("POS=", pos_params)
-    #print("BAND=", band_params)
+    # print("POS=", pos_params)
+    # print("BAND=", band_params)
 
     # Get access to the cube - sia call then datalink
     async_url, authenticated_id_token = casda.get_service_link_and_id(
