@@ -9,7 +9,6 @@ import os
 import re
 import time
 
-from six import PY3
 from six.moves.urllib.parse import unquote
 
 
@@ -448,9 +447,6 @@ def get_opal_password(opal_password, password_file):
         with open(password_file, 'r') as fd:
             password = fd.readlines()[0].strip()
     else:
-        if PY3:
-            password = getpass.getpass("Enter your OPAL password: ")
-        else:
-            password = getpass.getpass(str("Enter your OPAL password: "))
+        password = getpass.getpass(str("Enter your OPAL password: "))
 
     return password
