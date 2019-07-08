@@ -23,8 +23,10 @@ from __future__ import print_function, division, unicode_literals
 
 import argparse
 import os
+import astropy.units as u
 
 from astropy.io.votable import parse
+
 
 import casda
 
@@ -42,7 +44,7 @@ def parseargs():
     parser.add_argument("--full_files", help="Should full files be downloaded rather than just cutouts",
                         action='store_true')
     parser.add_argument("scheduling_block_id", help="The id of the ASKAP scheduling block to be queried.")
-    parser.add_argument("channel_width", help="Number of channels to slice each cube by.")
+    parser.add_argument("num_channels", help="Number of channels to slice each cube by.")
     parser.add_argument("-type", "--data_product_type", help="Sub-type of the data product. E.g. 'spectral.restored.3d'.  "
                                                   "If not specified, a default value of 'spectral.restored.3d' "
                                                   "will be used.")
@@ -52,7 +54,7 @@ def parseargs():
     return args
 
 
-def download_cutouts(sbid, username, password, destination_dir, data_product_sub_type):
+def download_cutouts(sbid, username, password, destination_dir, num_channels, data_product_sub_type):
     # 2) Use CASDA VO (secure) to query for the images associated with the given scheduling_block_id
     print ("\n\n** Finding images and image cubes for scheduling block {} ... \n\n".format(sbid))
 
@@ -61,7 +63,7 @@ def download_cutouts(sbid, username, password, destination_dir, data_product_sub
 
     data_product_id_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_publisher_did='cube-2008'"
     sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_id='" + str(sbid) \
-                               + "' and dataproduct_subtype='" + data_product_sub_type + "'"
+                               + "' and dataproduct_subtype='" + str(data_product_sub_type) + "'"
 
     filename = destination_dir + "image_cubes_" + str(sbid) + ".xml"
     casda.sync_tap_query(data_product_id_query, filename, username, password)
@@ -87,10 +89,26 @@ def download_cutouts(sbid, username, password, destination_dir, data_product_sub
     # For each source found in the catalogue query, create a position filter
     band_list = []
     for entry in results_array:
-        v1 = '0.2101548491658654'
-        v2 = '0.220026116656513'
-        band = v1 + " " + v2;
-        band_list.append(band)
+        em_xel = entry['em_xel']
+        em_min = entry['em_min']
+        em_max = entry['em_max']
+
+        if num_channels > em_xel:
+            num_channels = em_xel
+
+        channel_blocks = em_xel / num_channels
+        channel_width = em_max - em_min
+        step_size = channel_width / channel_blocks
+
+        # start at min
+        step = em_min
+
+        for b in range(int(channel_blocks)):
+            wavelength1 = step
+            step += step_size
+            wavelength2 = step
+            band = str(wavelength1) + " " + str(wavelength2)
+            band_list.append(band)
 
     # Generate cutouts from each image around each source
     # where there is no overlap an error file is generated but can be ignored.
@@ -117,7 +135,8 @@ def main():
 
     data_product_sub_type = 'spectral.restored.3d' if not args.data_product_type else args.data_product_type
 
-    return download_cutouts(args.scheduling_block_id, args.opal_username, password, destination_dir, data_product_sub_type)
+    return download_cutouts(args.scheduling_block_id, args.opal_username, password, destination_dir, int(args.num_channels),
+                            data_product_sub_type)
 
 if __name__ == '__main__':
     exit(main())
