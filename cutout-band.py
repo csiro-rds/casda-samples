@@ -3,7 +3,7 @@
 #############################################################################################
 #
 # Python script to demonstrate interacting with CASDA's TAP and SODA implementations to
-# retrieve cutout images in bulk and slice them by frequency.
+# retrieve cutout images in bulk and slice them up by channels.
 #
 # This script does a TAP query to get the image cubes for a given scheduling block, and can be
 # configured to either:
@@ -13,7 +13,7 @@
 #
 # Author: Chris Trapani on 3 July 2019
 #
-# Written for python 2.7
+# Written for python 3.7
 # Note: astropy is available on galaxy via 'module load astropy'
 # On other machines, try Anaconda https://www.continuum.io/downloads
 #
@@ -59,7 +59,6 @@ def get_freq_at_pos(pos, min_freq, hz_per_channel):
 def download_cutouts(sbid, username, password, destination_dir, num_channels, data_product_sub_type):
     print ("\n\n** Finding images and image cubes for scheduling block {} ... \n\n".format(sbid))
 
-    #data_product_id_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_publisher_did='cube-2008'"
     sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_id='" + str(sbid) \
                                + "' and dataproduct_subtype='" + str(data_product_sub_type) + "' and em_xel > 1"
 
@@ -133,7 +132,7 @@ def main():
         os.makedirs(destination_dir)
 
     # Change this to choose which environment to use, prod is the default
-    casda.use_dev();
+    #casda.use_dev();
 
     data_product_sub_type = 'spectral.restored.3d' if not args.data_product_type else args.data_product_type
 
