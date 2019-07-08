@@ -53,20 +53,18 @@ def parseargs():
     args = parser.parse_args()
     return args
 
+def get_freq_at_pos(pos, min_freq, hz_per_channel):
+    return min_freq + (hz_per_channel*pos)
 
 def download_cutouts(sbid, username, password, destination_dir, num_channels, data_product_sub_type):
-    # 2) Use CASDA VO (secure) to query for the images associated with the given scheduling_block_id
     print ("\n\n** Finding images and image cubes for scheduling block {} ... \n\n".format(sbid))
 
-    #data_product_id_query = "select * from ivoa.obscore where obs_id = '" + str(
-    #    sbid) + "' and dataproduct_type = 'cube' and dataproduct_subtype in ('cont.restored.t0', 'spectral.restored.3d')"
-
-    data_product_id_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_publisher_did='cube-2008'"
+    #data_product_id_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_publisher_did='cube-2008'"
     sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_id='" + str(sbid) \
-                               + "' and dataproduct_subtype='" + str(data_product_sub_type) + "'"
+                               + "' and dataproduct_subtype='" + str(data_product_sub_type) + "' and em_xel > 1"
 
     filename = destination_dir + "image_cubes_" + str(sbid) + ".xml"
-    casda.sync_tap_query(data_product_id_query, filename, username, password)
+    casda.sync_tap_query(sbid_multi_channel_query, filename, username, password)
     image_cube_votable = parse(filename, pedantic=False)
     results_array = image_cube_votable.get_table_by_id('results').array
 
@@ -86,28 +84,32 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
         print ("No image cubes for scheduling_block_id " + str(sbid))
         return 1
 
-    # For each source found in the catalogue query, create a position filter
+    # For each image cube, slice by channels using num_channels
     band_list = []
     for entry in results_array:
         em_xel = entry['em_xel']
-        em_min = entry['em_min']
-        em_max = entry['em_max']
+        em_min = entry['em_min'] * u.m
+        em_max = entry['em_max'] * u.m
+
+        min_freq = em_min.to(u.Hz, equivalencies=u.spectral())
+        max_freq = em_max.to(u.Hz, equivalencies=u.spectral())
 
         if num_channels > em_xel:
             num_channels = em_xel
 
-        channel_blocks = em_xel / num_channels
-        channel_width = em_max - em_min
-        step_size = channel_width / channel_blocks
+        hz_per_channel = (max_freq - min_freq) / em_xel
+        pos = 0
 
-        # start at min
-        step = em_min
+        channel_blocks = em_xel / num_channels
 
         for b in range(int(channel_blocks)):
-            wavelength1 = step
-            step += step_size
-            wavelength2 = step
-            band = str(wavelength1) + " " + str(wavelength2)
+            f1 = get_freq_at_pos(pos, min_freq, hz_per_channel)
+            pos += num_channels
+            f2 = get_freq_at_pos(pos, min_freq, hz_per_channel)
+            pos += 1 # do not overlap channels between image cubes
+            wavelength1 = f1.to(u.m, equivalencies=u.spectral())
+            wavelength2 = f2.to(u.m, equivalencies=u.spectral())
+            band = str(wavelength1).replace('m', '').strip() + " " + str(wavelength2).replace('m', '').strip()
             band_list.append(band)
 
     # Generate cutouts from each image around each source
