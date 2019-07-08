@@ -24,6 +24,7 @@ from __future__ import print_function, division, unicode_literals
 import argparse
 import os
 import astropy.units as u
+import math
 
 from astropy.io.votable import parse
 
@@ -59,8 +60,9 @@ def get_freq_at_pos(pos, min_freq, hz_per_channel):
 def download_cutouts(sbid, username, password, destination_dir, num_channels, data_product_sub_type):
     print ("\n\n** Finding images and image cubes for scheduling block {} ... \n\n".format(sbid))
 
-    sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_id='" + str(sbid) \
-                               + "' and dataproduct_subtype='" + str(data_product_sub_type) + "' and em_xel > 1"
+    # sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_id='" + str(sbid) \
+    #                            + "' and dataproduct_subtype='" + str(data_product_sub_type) + "' and em_xel > 1"
+    sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_publisher_did='cube-2008'"
 
     filename = destination_dir + "image_cubes_" + str(sbid) + ".xml"
     casda.sync_tap_query(sbid_multi_channel_query, filename, username, password)
@@ -83,7 +85,7 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
         print ("No image cubes for scheduling_block_id " + str(sbid))
         return 1
 
-    # For each image cube, slice by channels using num_channels
+    # For each image cube, slice by channels using num_channels specified by the user.
     band_list = []
     for entry in results_array:
         em_xel = entry['em_xel']
@@ -99,7 +101,7 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
         hz_per_channel = (max_freq - min_freq) / em_xel
         pos = 0
 
-        channel_blocks = em_xel / num_channels
+        channel_blocks = math.ceil(em_xel / num_channels)
 
         for b in range(int(channel_blocks)):
             f1 = get_freq_at_pos(pos, min_freq, hz_per_channel)
