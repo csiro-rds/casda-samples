@@ -42,8 +42,6 @@ def parseargs():
                         help="Your user name on the ATNF's online proposal system (normally an email address)")
     parser.add_argument("-p", "--opal_password", help="Your password on the ATNF's online proposal system")
     parser.add_argument("--password_file", help="The file holding your password for the ATNF's online proposal system")
-    parser.add_argument("--full_files", help="Should full files be downloaded rather than just cutouts",
-                        action='store_true')
     parser.add_argument("scheduling_block_id", help="The id of the ASKAP scheduling block to be queried.")
     parser.add_argument("num_channels", help="Number of channels to slice each cube by.")
     parser.add_argument("-type", "--data_product_type", help="Sub-type of the data product. E.g. 'spectral.restored.3d'.  "
