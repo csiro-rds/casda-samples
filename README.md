@@ -69,11 +69,11 @@ location in the source list file.
 
 ### cutout_channels.py
 
-Python script to demonstrate interaction with CASDA's SODA implementation to retrieve cutout images for an observation and slice them by wavelength.
+Python script to demonstrate interaction with CASDA's SODA implementation to retrieve image cubes for an observation and slice them by frequency.
 
-***Usage:*** python sources.py [-h] [-p OPAL_PASSWORD] [--password_file PASSWORD_FILE] [-type data_product_type] opal_username scheduling_block_id num_channels destination_directory
+***Usage:*** cutout_channels.py [-h] [-p OPAL_PASSWORD] [--password_file PASSWORD_FILE] [-type data_product_type] opal_username scheduling_block_id num_channels destination_directory
 
-This script does a TAP query to get the image cubes for a given scheduling block, and then produces cutouts for each image cube slicing by wavelength or channels.
-Input field 'num_channels' specifies how by many channels the image cube cutouts should be sliced.  
+This script does a TAP query to get the image cubes for a given scheduling block, and then slices those image cubes by frequency.
+Input field 'num_channels' specifies by many channels the image cubes will be sliced. 
 
 E.g. if the cube has 1024 channels, specifying a 'num_channels' value of 512 will give two cubes each with 512 channels. 

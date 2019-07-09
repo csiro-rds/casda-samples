@@ -58,9 +58,8 @@ def get_freq_at_pos(pos, min_freq, hz_per_channel):
 def download_cutouts(sbid, username, password, destination_dir, num_channels, data_product_sub_type):
     print ("\n\n** Finding images and image cubes for scheduling block {} ... \n\n".format(sbid))
 
-    # sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_id='" + str(sbid) \
-    #                            + "' and dataproduct_subtype='" + str(data_product_sub_type) + "' and em_xel > 1"
-    sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_publisher_did='cube-2008'"
+    sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_id='" + str(sbid) \
+                               + "' and dataproduct_subtype='" + str(data_product_sub_type) + "' and em_xel > 1"
 
     filename = destination_dir + "image_cubes_" + str(sbid) + ".xml"
     casda.sync_tap_query(sbid_multi_channel_query, filename, username, password)
