@@ -46,7 +46,7 @@ def parseargs():
     parser.add_argument("num_channels", help="Number of channels to slice each cube by.")
     parser.add_argument("-type", "--data_product_type", help="Sub-type of the data product. E.g. 'spectral.restored.3d'.  "
                                                   "If not specified, a default value of 'spectral.restored.3d' "
-                                                  "will be used.")
+                                                  "will be used.", default='spectral.restored.3d')
     parser.add_argument("destination_directory", help="The directory where the resulting files will be stored")
 
     args = parser.parse_args()
@@ -89,25 +89,26 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
         em_min = entry['em_min'] * u.m
         em_max = entry['em_max'] * u.m
 
-        min_freq = em_min.to(u.Hz, equivalencies=u.spectral())
-        max_freq = em_max.to(u.Hz, equivalencies=u.spectral())
+        min_freq = em_max.to(u.Hz, equivalencies=u.spectral())
+        max_freq = em_min.to(u.Hz, equivalencies=u.spectral())
 
-        if num_channels > em_xel:
-            num_channels = em_xel
+        step_size = num_channels
+        if step_size > em_xel:
+            step_size = em_xel
 
         hz_per_channel = (max_freq - min_freq) / em_xel
-        pos = 0
+        pos = em_xel
 
         channel_blocks = math.ceil(em_xel / num_channels)
 
         for b in range(int(channel_blocks)):
             f1 = get_freq_at_pos(pos, min_freq, hz_per_channel)
-            pos += num_channels
+            pos -= step_size
             f2 = get_freq_at_pos(pos, min_freq, hz_per_channel)
-            pos += 1 # do not overlap channels between image cubes
+            pos -= 1 # do not overlap channels between image cubes
             wavelength1 = f1.to(u.m, equivalencies=u.spectral())
             wavelength2 = f2.to(u.m, equivalencies=u.spectral())
-            band = str(wavelength1).replace('m', '').strip() + " " + str(wavelength2).replace('m', '').strip()
+            band = str(wavelength1.value) + " " + str(wavelength2.value)
             band_list.append(band)
 
     # Generate cutouts from each image around each source
@@ -133,10 +134,8 @@ def main():
     # Change this to choose which environment to use, prod is the default
     #casda.use_dev();
 
-    data_product_sub_type = 'spectral.restored.3d' if not args.data_product_type else args.data_product_type
-
     return download_cutouts(args.scheduling_block_id, args.opal_username, password, destination_dir, int(args.num_channels),
-                            data_product_sub_type)
+                            args.data_product_type)
 
 if __name__ == '__main__':
     exit(main())
