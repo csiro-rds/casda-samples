@@ -61,9 +61,9 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
     sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_id='" + str(sbid) \
                                + "' and dataproduct_subtype='" + str(data_product_sub_type) + "' and em_xel > 1"
 
-    filename = destination_dir + "image_cubes_" + str(sbid) + ".xml"
-    casda.sync_tap_query(sbid_multi_channel_query, filename, username, password)
-    image_cube_votable = parse(filename, pedantic=False)
+    # create async TAP query and wait for query to complete
+    casda.async_tap_query(sbid_multi_channel_query, username, password, destination_dir)
+    image_cube_votable = parse(destination_dir + "result", pedantic=False)
     results_array = image_cube_votable.get_table_by_id('results').array
 
     # 3) For each of the image cubes, query datalink to get the secure datalink details
@@ -132,7 +132,7 @@ def main():
         os.makedirs(destination_dir)
 
     # Change this to choose which environment to use, prod is the default
-    #casda.use_dev();
+    #casda.use_at();
 
     return download_cutouts(args.scheduling_block_id, args.opal_username, password, destination_dir, int(args.num_channels),
                             args.data_product_type)

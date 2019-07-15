@@ -147,6 +147,30 @@ def sync_tap_query(query_string, filename, username=None, password=None,
         f.write(response.content)
     return filename
 
+def async_tap_query(query_string, username=None, password=None, destination_dir=None,
+                    file_write_mode='wb', tap_url=None):
+    """
+    Run an adql (TAP) query, and write the resulting VO Table to a file
+    :param query_string: The ADQL query to be run
+    :param username: The OPAL username (if an authenticated query is required)
+    :param password: The OPAL password (if an authenticated query is required)
+    :param destination_dir: The directory where the files will be downloaded to. If not specified the files will be
+            saved to the "temp" folder in the current directory.
+    :param file_write_mode:  A string indicating how the file is to be opened (defaults to wb)
+    :param tap_url: The URL of the TAP service, if a custom address is needed.
+    :return: The path to the votable file
+    """
+    authenticated = password is not None
+    async_url = tap_url if tap_url else get_tap_async_url(proxy=authenticated)
+
+    params = {'query': query_string, 'lang': 'ADQL', 'format': 'votable'}
+    if authenticated:
+        response = requests.post(async_url, params=params, auth=(username, password))
+    else:
+        response = requests.post(async_url, params=params)
+    job_url = response.url
+    run_async_job(job_url)
+    download_all(job_url, destination_dir, file_write_mode)
 
 def create_async_tap_job(username=None, password=None, tap_url=None):
     """
