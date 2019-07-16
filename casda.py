@@ -365,7 +365,7 @@ def run_async_jobs_and_download(job_locations, destination_dir, poll_interval=3)
     Start many async jobs (e.g. TAP or SODA) in bulk and wait for it to be completed.
     Download will start when a job is completed
 
-    :param job_location: The url to query the job status and details
+    :param job_locations: A list of urls to query each job for status / details
     :param destination_dir: Destination directory to download the data of the completed job.
     :param poll_interval: The number of seconds to wait between checks on the status of the job.
     """
@@ -381,7 +381,6 @@ def run_async_jobs_and_download(job_locations, destination_dir, poll_interval=3)
     jobs_completed = 0
     while jobs_completed != len(job_locations):
         for job_location in job_locations:
-            # Poll until the async job has finished
             job_details = get_job_details_xml(job_location)
             status = read_job_status(job_details)
 
