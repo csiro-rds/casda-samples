@@ -360,6 +360,43 @@ def run_async_job(job_location, poll_interval=20):
         status = read_job_status(job_details)
     return status
 
+def run_async_jobs_and_download(job_locations, destination_dir, poll_interval=3):
+    """
+    Start many async jobs (e.g. TAP or SODA) in bulk and wait for it to be completed.
+    Download will start when a job is completed
+
+    :param job_location: The url to query the job status and details
+    :param destination_dir: Destination directory to download the data of the completed job.
+    :param poll_interval: The number of seconds to wait between checks on the status of the job.
+    """
+
+    # start all jobs by using the /phase endpoint
+    for job_location in job_locations:
+        # Start the async job
+        print("\n\n** Starting the retrieval job...\n\n")
+        response = requests.post(job_location + "/phase", data={'phase': 'RUN'})
+
+    # iterate each job and wait for completion
+    # when complete start downloading
+    jobs_completed = 0
+    while jobs_completed != len(job_locations):
+        for job_location in job_locations:
+            # Poll until the async job has finished
+            job_details = get_job_details_xml(job_location)
+            status = read_job_status(job_details)
+
+            print("Job %s, waiting for %d seconds." % (status, poll_interval))
+            time.sleep(poll_interval)
+            print("Polling job status")
+            job_details = get_job_details_xml(job_location)
+            status = read_job_status(job_details)
+
+            if(status == 'COMPLETED'):
+                # finished job
+                print('\nJob finished with status %s address is %s\n\n' % (status, job_location))
+                jobs_completed += 1
+                download_all(job_location, destination_dir)
+
 
 def download_result_file(result, destination_dir=None, write_mode='wb'):
     """

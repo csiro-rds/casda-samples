@@ -59,7 +59,8 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
     print ("\n\n** Finding images and image cubes for scheduling block {} ... \n\n".format(sbid))
 
     sbid_multi_channel_query = "SELECT TOP 1000 * FROM ivoa.obscore where obs_id='" + str(sbid) \
-                               + "' and dataproduct_subtype='" + str(data_product_sub_type) + "' and em_xel > 1"
+                               + "' and dataproduct_subtype='" + str(data_product_sub_type) \
+                               + "' and em_xel > 1 and dataproduct_type = 'cube'"
 
     # create async TAP query and wait for query to complete
     casda.async_tap_query(sbid_multi_channel_query, username, password, destination_dir)
@@ -75,8 +76,8 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
                                                                           password,
                                                                           service='cutout_service',
                                                                           destination_dir=destination_dir)
-        if authenticated_id_token is not None and len(authenticated_id_tokens) < 10:
-            authenticated_id_tokens.append(authenticated_id_token)
+        if authenticated_id_token is not None:
+            authenticated_id_tokens.append([authenticated_id_token, image_cube_result])
 
     if len(authenticated_id_tokens) == 0:
         print ("No image cubes for scheduling_block_id " + str(sbid))
@@ -84,10 +85,14 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
 
     # For each image cube, slice by channels using num_channels specified by the user.
     band_list = []
-    for entry in results_array:
-        em_xel = entry['em_xel']
-        em_min = entry['em_min'] * u.m
-        em_max = entry['em_max'] * u.m
+    job_locations = []
+    for entry in authenticated_id_tokens:
+        auth_id_token = entry[0]
+        ic = entry[1]
+
+        em_xel = ic['em_xel']
+        em_min = ic['em_min'] * u.m
+        em_max = ic['em_max'] * u.m
 
         min_freq = em_max.to(u.Hz, equivalencies=u.spectral())
         max_freq = em_min.to(u.Hz, equivalencies=u.spectral())
@@ -111,14 +116,14 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
             band = str(wavelength1.value) + " " + str(wavelength2.value)
             band_list.append(band)
 
-    # Generate cutouts from each image around each source
-    # where there is no overlap an error file is generated but can be ignored.
-    job_location = casda.create_async_soda_job(authenticated_id_tokens)
-    casda.add_params_to_async_job(job_location, 'BAND', band_list)
-    job_status = casda.run_async_job(job_location)
-    print ('\nJob finished with status %s address is %s\n\n' % (job_status, job_location))
-    if job_status != 'ERROR':
-        casda.download_all(job_location, destination_dir)
+        # create job for given band params
+        job_location = casda.create_async_soda_job([auth_id_token])
+        casda.add_params_to_async_job(job_location, 'BAND', band_list)
+        job_locations.append(job_location)
+
+    # run all jobs and download
+    casda.run_async_jobs_and_download(job_locations, destination_dir)
+
     return 0
 
 
