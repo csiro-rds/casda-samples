@@ -63,8 +63,8 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
                                + "' and em_xel > 1 and dataproduct_type = 'cube'"
 
     # create async TAP query and wait for query to complete
-    casda.async_tap_query(sbid_multi_channel_query, username, password, destination_dir)
-    image_cube_votable = parse(destination_dir + "result", pedantic=False)
+    result_file_path = casda.async_tap_query(sbid_multi_channel_query, username, password, destination_dir)
+    image_cube_votable = parse(result_file_path, pedantic=False)
     results_array = image_cube_votable.get_table_by_id('results').array
 
     # 3) For each of the image cubes, query datalink to get the secure datalink details

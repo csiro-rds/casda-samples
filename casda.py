@@ -171,6 +171,7 @@ def async_tap_query(query_string, username=None, password=None, destination_dir=
     job_url = response.url
     run_async_job(job_url)
     download_all(job_url, destination_dir, file_write_mode)
+    return destination_dir + "result"
 
 def create_async_tap_job(username=None, password=None, tap_url=None):
     """
