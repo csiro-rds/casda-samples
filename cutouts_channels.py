@@ -44,16 +44,14 @@ def parseargs():
     parser.add_argument("--password_file", help="The file holding your password for the ATNF's online proposal system")
     parser.add_argument("scheduling_block_id", help="The id of the ASKAP scheduling block to be queried.")
     parser.add_argument("num_channels", help="Number of channels to slice each cube by.")
-    parser.add_argument("-type", "--data_product_type", help="Sub-type of the data product. E.g. 'spectral.restored.3d'.  "
-                                                  "If not specified, a default value of 'spectral.restored.3d' "
-                                                  "will be used.", default='spectral.restored.3d')
+    parser.add_argument("-type", "--data_product_type",
+                        help="Sub-type of the data product. E.g. 'spectral.restored.3d'.  "
+                             "If not specified, a default value of 'spectral.restored.3d' "
+                             "will be used.", default='spectral.restored.3d')
     parser.add_argument("destination_directory", help="The directory where the resulting files will be stored")
 
     args = parser.parse_args()
     return args
-
-def get_freq_at_pos(pos, min_freq, hz_per_channel):
-    return min_freq + (hz_per_channel*pos)
 
 def download_cutouts(sbid, username, password, destination_dir, num_channels, data_product_sub_type):
     print ("\n\n** Finding images and image cubes for scheduling block {} ... \n\n".format(sbid))
@@ -84,41 +82,15 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
         return 1
 
     # For each image cube, slice by channels using num_channels specified by the user.
-    band_list = []
     job_locations = []
     for entry in authenticated_id_tokens:
         auth_id_token = entry[0]
-        ic = entry[1]
-
-        em_xel = ic['em_xel']
-        em_min = ic['em_min'] * u.m
-        em_max = ic['em_max'] * u.m
-
-        min_freq = em_max.to(u.Hz, equivalencies=u.spectral())
-        max_freq = em_min.to(u.Hz, equivalencies=u.spectral())
-
-        step_size = num_channels
-        if step_size > em_xel:
-            step_size = em_xel
-
-        hz_per_channel = (max_freq - min_freq) / em_xel
-        pos = em_xel
-
-        channel_blocks = math.ceil(em_xel / num_channels)
-
-        for b in range(int(channel_blocks)):
-            f1 = get_freq_at_pos(pos, min_freq, hz_per_channel)
-            pos -= step_size
-            f2 = get_freq_at_pos(pos, min_freq, hz_per_channel)
-            pos -= 1 # do not overlap channels between image cubes
-            wavelength1 = f1.to(u.m, equivalencies=u.spectral())
-            wavelength2 = f2.to(u.m, equivalencies=u.spectral())
-            band = str(wavelength1.value) + " " + str(wavelength2.value)
-            band_list.append(band)
+        channel_list = []
+        channel_list.append(num_channels)
 
         # create job for given band params
         job_location = casda.create_async_soda_job([auth_id_token])
-        casda.add_params_to_async_job(job_location, 'BAND', band_list)
+        casda.add_params_to_async_job(job_location, 'CHANNEL', channel_list)
         job_locations.append(job_location)
 
     # run all jobs and download
@@ -137,9 +109,10 @@ def main():
         os.makedirs(destination_dir)
 
     # Change this to choose which environment to use, prod is the default
-    #casda.use_at();
+    # casda.use_at();
 
-    return download_cutouts(args.scheduling_block_id, args.opal_username, password, destination_dir, int(args.num_channels),
+    return download_cutouts(args.scheduling_block_id, args.opal_username, password, destination_dir,
+                            int(args.num_channels),
                             args.data_product_type)
 
 if __name__ == '__main__':
