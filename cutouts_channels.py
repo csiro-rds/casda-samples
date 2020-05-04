@@ -85,8 +85,23 @@ def download_cutouts(sbid, username, password, destination_dir, num_channels, da
     job_locations = []
     for entry in authenticated_id_tokens:
         auth_id_token = entry[0]
+
+        # get the image cube and number of channels
+        ic = entry[1]
+        channel_count = ic['em_xel']
         channel_list = []
-        channel_list.append(num_channels)
+
+        # wrap to max number of channels, if provided value exceeds channel count
+        if num_channels > channel_count:
+            num_channels = channel_count
+
+        # slice up cube into chunks using the number of channels as the size of each chunk
+        slices = math.ceil(channel_count / num_channels)
+        current_step = 1
+
+        for s in range(slices):
+            channel_list.append(str(current_step) + " " + str(num_channels * int(s+1)))
+            current_step = (num_channels * int(s+1)) + 1
 
         # create job for given band params
         job_location = casda.create_async_soda_job([auth_id_token])
