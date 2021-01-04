@@ -77,3 +77,13 @@ This script does a TAP query to get the image cubes for a given scheduling block
 Input field 'num_channels' specifies by many channels the image cubes will be sliced. 
 
 E.g. if the cube has 1024 channels, specifying a 'num_channels' value of 512 will give two cubes each with 512 channels. 
+
+### cutouts_by_proj.py
+
+Python script to demonstrate interaction with CASDA's SODA implementation to retrieve cutout images around a list of positions given a project name.
+
+***Usage:*** cutouts_by_proj.py [-h] [-p OPAL_PASSWORD] [--password_file PASSWORD_FILE] opal_username project_name source_list_file destination_directory cutout_radius
+
+This script does a TAP query to get images given a list of positions and a project name (text snippet), and then generates cutouts at those positions from those images. Use "EMU" for EMU and "Rapid" for RACS. Example usage:
+>python cutouts_by_proj.py OPAL-username Rapid mysources.txt racs_output 0.1
+For RACS cutouts, with list of positions in a file mysources,txt, and cutout radius 0.1 degrees.
