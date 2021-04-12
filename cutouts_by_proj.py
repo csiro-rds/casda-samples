@@ -16,6 +16,9 @@
 # Take in proj name in TAP query of images. Proj argument should be text snippet of the project name in obscore. e.g. EMU for EMU, Rapid for RACS. 
 # Also now does RA and Dec search in the TAP query of images (not just in the SODA cutout command).
 #
+# Modified:MH on 12th Apr
+# Use s_region for image region. This may contain NaN pixel borders, but better representation of whether a point is within an image. (Previously used fixed radius from image centre). 
+#
 # Example usage:
 # python cutouts_by_proj.py OPAL-username Rapid mysources.txt racs_output 0.1
 # For RACS cutouts, with list of positions in a file mysources,txt, and cutout radius 0.1 degrees.
@@ -91,7 +94,7 @@ def produce_cutouts(source_list, proj, username, password, destination_dir, cuto
         ra = sky_loc.ra.degree
         dec = sky_loc.dec.degree
         data_product_id_query = "select * from ivoa.obscore where obs_collection LIKE '%" + proj + \
-                            "%' and dataproduct_subtype = 'cont.restored.t0' and pol_states = '/I/' and 1 = CONTAINS(POINT('ICRS', s_ra, s_dec), CIRCLE('ICRS'," + str(ra) + ","+str(dec)+",3))"
+                            "%' and dataproduct_subtype = 'cont.restored.t0' and pol_states = '/I/' and 1 = CONTAINS(POINT('ICRS',"+ str(ra) + ","+ str(dec) + "),s_region)"
         casda.sync_tap_query(data_product_id_query, filename, username=username, password=password)
         image_cube_votable = votable.parse(filename, pedantic=False)
         results_array = image_cube_votable.get_table_by_id('results').array
