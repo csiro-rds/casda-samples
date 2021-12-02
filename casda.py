@@ -273,7 +273,10 @@ def parse_datalink_for_service_and_id(filename, service_name):
 
     # Find the authenticated id token for accessing the image cube
     for x in results_array:
-        if x['service_def'].decode("utf8") == service_name:
+        service_def = x['service_def']
+        if isinstance(service_def, bytes):
+            service_def = service_def.decode("utf8")
+        if service_def == service_name:
             authenticated_id_token = x['authenticated_id_token']
 
     # Find the async url
